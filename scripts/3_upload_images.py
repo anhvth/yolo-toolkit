@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
-from label_studio_sdk import Client
+from label_studio_sdk import LabelStudio
 
 # Load environment variables
 load_dotenv()
@@ -51,7 +51,7 @@ def upload_images(project_id=None, image_dir=None):
     print(f"📁 Found {len(image_files)} images in {image_dir}")
     
     try:
-        client = Client(url=LS_URL, api_key=API_KEY)
+        client = LabelStudio(base_url=LS_URL, api_key=API_KEY)
         
         # Create tasks for each image
         tasks = []
@@ -65,7 +65,7 @@ def upload_images(project_id=None, image_dir=None):
             tasks.append(task_data)
         
         print(f"⬆️  Uploading {len(tasks)} images to project {project_id}...")
-        client.import_tasks(int(project_id), tasks)
+        client.tasks.create_many(project=int(project_id), request=tasks)
         
         print(f"✅ Successfully uploaded {len(tasks)} images!")
         print(f"   View them at: {LS_URL}/projects/{project_id}")

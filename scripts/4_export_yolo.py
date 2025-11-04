@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
-from label_studio_sdk import Client
+from label_studio_sdk import LabelStudio
 
 # Load environment variables
 load_dotenv()
@@ -33,10 +33,13 @@ def export_yolo(project_id=None, export_dir=None):
     print(f"🔗 Connecting to Label Studio at {LS_URL}...")
     
     try:
-        client = Client(url=LS_URL, api_key=API_KEY)
+        client = LabelStudio(base_url=LS_URL, api_key=API_KEY)
         
         print(f"📦 Exporting annotations from project {project_id}...")
-        export_data = client.export_tasks(int(project_id), export_type="YOLO")
+        export_data = client.projects.exports.create(
+            id=int(project_id),
+            export_type="YOLO"
+        )
         
         # Save export to file
         export_file = export_path / "export.zip"

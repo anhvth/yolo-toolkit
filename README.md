@@ -186,6 +186,42 @@ python scripts/2_create_project.py --title "My YOLO Project"
 
 **Output**: Project ID (save this to `.env` as `PROJECT_ID`)
 
+**Features**:
+- Prevents duplicate project names by default
+- Use `--allow-duplicate` to create projects with same name
+- Lists existing projects if duplicate detected
+
+**Example with duplicate prevention**:
+```bash
+# First time - creates project
+python scripts/2_create_project.py --title "obj-detection"
+
+# Second time - shows error and existing projects
+python scripts/2_create_project.py --title "obj-detection"
+
+# Override to allow duplicate
+python scripts/2_create_project.py --title "obj-detection" --allow-duplicate
+```
+
+---
+
+### 🗑️ `scripts/delete_project.py`
+
+Delete a Label Studio project by ID or title.
+
+```bash
+# Delete by ID
+python scripts/delete_project.py --id 1
+
+# Delete by title (searches first)
+python scripts/delete_project.py --title "My YOLO Project"
+
+# Skip confirmation prompt
+python scripts/delete_project.py --id 1 --yes
+```
+
+**Safety**: Requires confirmation unless `--yes` flag is used.
+
 ---
 
 ### 3️⃣ `scripts/3_upload_images.py`

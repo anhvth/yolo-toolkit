@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import List, Optional
 import argparse
 from dotenv import load_dotenv
-from label_studio_sdk import Client
+from label_studio_sdk import LabelStudio
 from ultralytics import YOLO
 
 # Configure logging
@@ -32,7 +32,7 @@ class YOLOLabelStudioCLI:
         self.ls_url = ls_url
         self.api_key = api_key
         self.model_path = model_path
-        self.client = Client(url=ls_url, api_key=api_key)
+        self.client = LabelStudio(base_url=ls_url, api_key=api_key)
         self.model = None
         
     def load_model(self):
@@ -45,10 +45,9 @@ class YOLOLabelStudioCLI:
         """Get all unlabeled tasks from project"""
         logger.info(f"Fetching unlabeled tasks from project {project_id}")
         
-        project = self.client.get_project(project_id)
-        tasks = project.get_tasks()
+        tasks = self.client.tasks.list(project=project_id)
         
-        unlabeled = [t for t in tasks if not t.get('annotations')]
+        unlabeled = [t for t in tasks if not hasattr(t, 'annotations') or not t.annotations]
         logger.info(f"Found {len(unlabeled)} unlabeled tasks")
         return unlabeled
     
@@ -142,7 +141,7 @@ class YOLOLabelStudioCLI:
         # Get tasks
         if task_ids:
             logger.info(f"Processing {len(task_ids)} specified tasks")
-            tasks = [self.client.get_task(tid) for tid in task_ids]
+            tasks = [self.client.tasks.get(id=tid) for tid in task_ids]
         else:
             tasks = self.get_unlabeled_tasks(project_id)
         
@@ -163,9 +162,10 @@ class YOLOLabelStudioCLI:
             # Upload prediction to Label Studio
             if result['success']:
                 try:
-                    self.client.create_prediction(
-                        task_id=result['task_id'],
-                        **result['predictions']
+                    self.client.predictions.create(
+                        task=result['task_id'],
+                        result=result['predictions']['result'],
+                        score=result['predictions']['score']
                     )
                     logger.info(f"✓ Uploaded prediction for task {result['task_id']}")
                 except Exception as e:

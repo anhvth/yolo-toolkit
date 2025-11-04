@@ -1,7 +1,7 @@
 # YOLO + Label Studio Integration Kit
 # Core dependencies
 label-studio>=1.9.0
-label-studio-sdk>=0.0.32
+label-studio-sdk==2.0.4
 ultralytics>=8.0.0
 python-dotenv>=1.0.0
 
