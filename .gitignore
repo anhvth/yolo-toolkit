@@ -1,0 +1,60 @@
+# Environment variables
+.env
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Data and models
+data/images/*
+!data/images/.gitkeep
+data/exports/*
+!data/exports/.gitkeep
+data/predictions/
+models/*.pt
+models/*.onnx
+!models/.gitkeep
+
+# YOLO runs
+runs/
+
+# Label Studio
+.label_studio/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
