@@ -1,0 +1,1 @@
+yolo train model=yolo11n.pt data=data/exported/yolo_dataset/data.yaml 

@@ -229,10 +229,48 @@ python scripts/delete_project.py --id 1 --yes
 Upload images from `data/images/` to Label Studio.
 
 ```bash
-python scripts/3_upload_images.py --project-id 1 --image-dir data/images
+# Upload to default project (from .env)
+python scripts/3_upload_images.py
+
+# Upload to specific project
+python scripts/3_upload_images.py --project-id 2
+
+# Upload from custom directory
+python scripts/3_upload_images.py --image-dir path/to/images
+
+# Force upload duplicates
+python scripts/3_upload_images.py --force
 ```
 
+**Features**:
+- Automatically checks for existing images in the project
+- Skips duplicate uploads by default
+- Shows summary of new vs existing images
+- Use `--force` to upload duplicates anyway
+
 **Supported formats**: jpg, jpeg, png, bmp, gif, webp
+
+**Example output**:
+```
+🔗 Connecting to Label Studio at http://localhost:8080...
+📁 Found 150 images in data/images
+🔍 Checking for existing images in project 1...
+   Found 100 existing images
+
+⚠️  Skipping 100 duplicate images:
+   - image001.jpg
+   - image002.jpg
+   ...
+
+⬆️  Uploading 50 new images to project 1...
+
+✅ Successfully uploaded 50 images!
+
+📊 Upload Summary:
+   New images uploaded: 50
+   Duplicates skipped: 100
+   Total in directory: 150
+```
 
 ---
 

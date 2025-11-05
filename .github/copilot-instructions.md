@@ -24,9 +24,10 @@ client = LabelStudio(base_url=url, api_key=key)  # NOT Client(url=..., api_key=.
 
 ### API Method Changes
 - `client.projects.create()` not `client.start_project()`
-- `client.tasks.create_many(project=id, request=tasks)` not `client.import_tasks()`
+- `client.projects.import_tasks(id=project_id, request=tasks)` not `client.tasks.create_many()`
 - `client.projects.exports.create(id=project_id, export_type="YOLO")` not `client.export_tasks()`
 - `client.tasks.get(id=tid)` not `client.get_task(tid)`
+- `client.tasks.list(project=id)` returns task objects with `.data` attribute
 
 See `test_api.py` for canonical authentication example.
 
@@ -40,6 +41,9 @@ All scripts use `.env` with `python-dotenv`. Critical variables:
 - `LABEL_STUDIO_API_KEY`: Personal Access Token from UI → Account & Settings → Access Token
 - `PROJECT_ID`: Set after running script 2 (returned in output)
 - Paths: `IMAGE_DIR`, `EXPORT_DIR`, `PREDICTIONS_DIR`, model paths
+- **Local file serving (required for local Label Studio, not Docker):**
+  - `LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true`
+  - `LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=<absolute-path-to-data-dir>`
 
 **Important:** API tokens are JWT format (not legacy tokens) - 401 errors mean token type mismatch or expiry.
 
@@ -48,16 +52,18 @@ All scripts use `.env` with `python-dotenv`. Critical variables:
 Scripts are **numbered 1-6 for sequential execution**:
 1. Start server (Docker or local)
 2. Create project → **save PROJECT_ID to .env** (checks for duplicates by default)
-3. Upload images from `data/images/`
+3. Upload images from `data/images/` (prevents duplicate uploads automatically)
 4. Export annotations (produces zip)
 5. Train YOLO (requires extracted export, reads `data.yaml`)
 6. Predict unlabeled images
 
 **Project Management:**
 - Script 2 prevents duplicate project names by default (use `--allow-duplicate` to override)
+- Script 3 prevents duplicate image uploads by checking existing tasks (use `--force` to override)
 - Use `scripts/delete_project.py --id <id>` or `--title <name>` to delete projects
 - `client.projects.list(title="name")` to search by name
 - `client.projects.delete(id=id)` to delete via API
+- `client.tasks.list(project=id)` to get existing tasks for duplicate checking
 
 **All scripts** support `--help` and environment variable overrides via CLI args.
 
@@ -66,6 +72,11 @@ Scripts are **numbered 1-6 for sequential execution**:
 **Docker (recommended):** `docker compose up -d` runs both services. Images served via `/data/images/` mount (absolute paths in tasks).
 
 **Local:** Use `scripts/1_start_labelstudio.py` or `reset_label_studio_local.sh` (creates admin@example.com/admin user). Data in `~/.local/share/label-studio/`.
+- **CRITICAL**: Local setup requires environment variables for file serving:
+  - Script 1 automatically sets `LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true`
+  - Sets `LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT` to project's `data/` directory
+  - Images uploaded with `/data/local-files/?d=images/` format (not `/data/images/`)
+- Script 3 auto-detects local vs Docker and uses correct path format
 
 **ML Backend connection:** In project settings → Model → Connect to `http://localhost:9090` for auto-predictions in UI.
 
@@ -139,3 +150,22 @@ Use emoji indicators (🔗, 📝, ✅, ❌, 💡) for console output clarity.
 - **Dependencies**: Pin `label-studio-sdk==2.0.4` exactly (conflicts with >=2.0.5)
 - **Docker**: Always test on ARM64 if adding services (platform constraint)
 - **Documentation**: Update both README.md workflow section and script docstrings
+
+
+## DOCUMENT
+Use fetched tool to learn more about the Label Studio Python SDK and provide a quick reference table in Markdown format.
+
+| What you want to do           | SDK Method / Object                   | Example Snippet                                                | Docs URL                                                                                             |
+| ----------------------------- | ------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Connect to Label Studio       | `Client(url, api_key)`                | `ls = Client("http://localhost:8080", "YOUR_KEY")`             | [API Client](https://labelstud.io/sdk/client.html)                                                   |
+| List all projects             | `ls.get_projects()`                   | `projects = ls.get_projects()`                                 | [Projects](https://labelstud.io/sdk/project.html#get-projects)                                       |
+| Create a new project          | `ls.start_project()`                  | `project = ls.start_project(title="Demo", label_config="...")` | [Create Project](https://labelstud.io/sdk/project.html#label_studio_sdk.client.Client.start_project) |
+| Get an existing project by ID | `ls.get_project(id)`                  | `project = ls.get_project(1)`                                  | [Get Project](https://labelstud.io/sdk/project.html#get-project)                                     |
+| Import tasks (upload data)    | `project.import_tasks()`              | `project.import_tasks([{"image": "https://..."}, ...])`        | [Import Tasks](https://labelstud.io/sdk/project.html#import-tasks)                                   |
+| Export annotations            | `project.export_tasks(format="yolo")` | `project.export_tasks("yolo")`                                 | [Export Tasks](https://labelstud.io/sdk/project.html#export-tasks)                                   |
+| Get annotation results        | `project.get_tasks()`                 | `tasks = project.get_tasks()`                                  | [Get Tasks](https://labelstud.io/sdk/project.html#get-tasks)                                         |
+| Delete a project              | `project.delete()`                    | `project.delete()`                                             | [Delete Project](https://labelstud.io/sdk/project.html#delete-project)                               |
+| Manage users                  | `ls.get_users()`                      | `users = ls.get_users()`                                       | [Users](https://labelstud.io/sdk/user.html)                                                          |
+| Manage ML backends            | `ls.get_ml_backends()`                | `mls = ls.get_ml_backends()`                                   | [ML Backend](https://labelstud.io/sdk/ml.html)                                                       |
+
+Would you like me to extend this table to include **common CLI equivalents** (e.g., `label-studio project create ...`)?

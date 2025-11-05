@@ -1,5 +1,6 @@
 # Environment variables
 .env
+ls_settings.json
 
 # Python-generated files
 __pycache__/
@@ -58,3 +59,6 @@ runs/
 # OS
 .DS_Store
 Thumbs.db
+data/
+label_studio_data/
+yolo11n.pt

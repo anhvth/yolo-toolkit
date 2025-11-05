@@ -4,25 +4,19 @@ Script 6: Generate Predictions for Unlabeled Images
 Uses trained YOLO model to predict on unlabeled images and generate pre-annotations.
 """
 
-import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
 from ultralytics import YOLO
-
-# Load environment variables
-load_dotenv()
-
-UPDATED_MODEL_PATH = os.getenv("UPDATED_MODEL_PATH", "models/updated_model.pt")
-IMAGE_DIR = os.getenv("IMAGE_DIR", "data/images")
-PREDICTIONS_DIR = os.getenv("PREDICTIONS_DIR", "data/predictions")
+from config import get_config
 
 def predict_unlabeled(model_path=None, image_dir=None, output_dir=None, conf_threshold=0.25):
     """Generate predictions for unlabeled images"""
     
-    model_path = model_path or UPDATED_MODEL_PATH
-    image_dir = image_dir or IMAGE_DIR
-    output_dir = output_dir or PREDICTIONS_DIR
+    config = get_config()
+    
+    model_path = model_path or config.updated_model_path
+    image_dir = image_dir or config.image_dir
+    output_dir = output_dir or config.predictions_dir
     
     model_file = Path(model_path)
     if not model_file.exists():

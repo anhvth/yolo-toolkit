@@ -4,27 +4,20 @@ Script 5: Train YOLO Model
 Fine-tunes a YOLO model using exported annotations from Label Studio.
 """
 
-import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
 from ultralytics import YOLO
-
-# Load environment variables
-load_dotenv()
-
-BASE_MODEL_PATH = os.getenv("BASE_MODEL_PATH", "models/base_model.pt")
-UPDATED_MODEL_PATH = os.getenv("UPDATED_MODEL_PATH", "models/updated_model.pt")
-EPOCHS = int(os.getenv("EPOCHS", "30"))
-IMAGE_SIZE = int(os.getenv("IMAGE_SIZE", "640"))
+from config import get_config
 
 def train_yolo(data_yaml, base_model=None, output_model=None, epochs=None, imgsz=None):
     """Train YOLO model on exported dataset"""
     
-    base_model = base_model or BASE_MODEL_PATH
-    output_model = output_model or UPDATED_MODEL_PATH
-    epochs = epochs or EPOCHS
-    imgsz = imgsz or IMAGE_SIZE
+    config = get_config()
+    
+    base_model = base_model or config.base_model_path
+    output_model = output_model or config.updated_model_path
+    epochs = epochs or config.epochs
+    imgsz = imgsz or config.image_size
     
     data_path = Path(data_yaml)
     if not data_path.exists():

@@ -1,0 +1,21 @@
+{
+  "label_studio": {
+    "url": "http://localhost:8080",
+    "api_key": "YOUR_API_KEY_HERE",
+    "project_id": 1,
+    "local_files_serving_enabled": true,
+    "local_files_document_root": "/absolute/path/to/your/project/data"
+  },
+  "paths": {
+    "image_dir": "data/images",
+    "export_dir": "data/exports",
+    "predictions_dir": "data/predictions",
+    "base_model_path": "models/base_model.pt",
+    "updated_model_path": "models/updated_model.pt"
+  },
+  "yolo": {
+    "epochs": 30,
+    "image_size": 640,
+    "model_score_threshold": 0.25
+  }
+}

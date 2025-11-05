@@ -1,0 +1,21 @@
+{
+  "label_studio": {
+    "url": "http://localhost:8080",
+    "api_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6ODA2OTUxMDIyMiwiaWF0IjoxNzYyMzEwMjIyLCJqdGkiOiJiYmE4NjY5MTE4OGI0ZTRmYmMzNTEzNjYzZjhiMTMyMiIsInVzZXJfaWQiOiIxIn0.NB1i2GAzfFQDDHg8DQ-YY4qqwTt5V-Ep6UXTNKi-E4U",
+    "project_id": 4,
+    "local_files_serving_enabled": true,
+    "local_files_document_root": "/Users/anhvth/projects/yolo-labelstuio-kits/data"
+  },
+  "paths": {
+    "image_dir": "data/images",
+    "export_dir": "data/exports",
+    "predictions_dir": "data/predictions",
+    "base_model_path": "models/base_model.pt",
+    "updated_model_path": "models/updated_model.pt"
+  },
+  "yolo": {
+    "epochs": 30,
+    "image_size": 640,
+    "model_score_threshold": 0.25
+  }
+}

@@ -4,33 +4,28 @@ Helper Script: Delete Label Studio Project
 Deletes a Label Studio project by ID or title.
 """
 
-import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
 from label_studio_sdk import LabelStudio
-
-# Load environment variables
-load_dotenv()
-
-LS_URL = os.getenv("LABEL_STUDIO_URL", "http://localhost:8080")
-API_KEY = os.getenv("LABEL_STUDIO_API_KEY")
+from config import get_config
 
 def delete_project(project_id=None, project_title=None, confirm=True):
     """Delete a Label Studio project"""
     
-    if not API_KEY:
-        print("❌ Error: LABEL_STUDIO_API_KEY not found in environment")
+    config = get_config()
+    
+    if not config.ls_api_key:
+        print("❌ Error: LABEL_STUDIO_API_KEY not found in ls_settings.json")
         sys.exit(1)
     
     if not project_id and not project_title:
         print("❌ Error: Either --id or --title must be provided")
         sys.exit(1)
     
-    print(f"🔗 Connecting to Label Studio at {LS_URL}...")
+    print(f"🔗 Connecting to Label Studio at {config.ls_url}...")
     
     try:
-        client = LabelStudio(base_url=LS_URL, api_key=API_KEY)
+        client = LabelStudio(base_url=config.ls_url, api_key=config.ls_api_key)
         
         # If title provided, find project by title
         if project_title and not project_id:
@@ -61,7 +56,7 @@ def delete_project(project_id=None, project_title=None, confirm=True):
             print(f"\n⚠️  WARNING: This will permanently delete the project!")
             print(f"   Project ID: {project_id}")
             print(f"   Title: {project_title}")
-            print(f"   URL: {LS_URL}/projects/{project_id}")
+            print(f"   URL: {config.ls_url}/projects/{project_id}")
             
             response = input("\nType 'yes' to confirm deletion: ")
             if response.lower() != 'yes':

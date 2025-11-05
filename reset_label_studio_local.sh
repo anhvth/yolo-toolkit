@@ -1,18 +1,16 @@
-# #!/bin/bash
-# # reset_label_studio_local.sh
-
-# # Stop Label Studio if running
-# pkill -f "label-studio" 2>/dev/null
-
-# # Remove all Label Studio data
-# rm -rf ~/.local/share/label-studio
-
-# # Initialize a fresh install
-# label-studio reset_password admin
-
-# # Create admin user
-# # label-studio user --username admin --password admin
-label-studio start --username admin@example.com --password admin
+#!/bin/bash
 
 
-echo "✅ Reset complete. Admin user: admin@example.com / admin"
+# Start Label Studio with the data directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$SCRIPT_DIR"
+echo "Project root: $PROJECT_ROOT"
+cd "$PROJECT_ROOT"
+export LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true
+export LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/Users/anhvth/projects/yolo-labelstuio-kits/
+label-studio start --username admin@example.com --password admin --data-dir label_studio_data
+
+echo ""
+echo "✅ Label Studio started"
+echo "👤 Admin user: admin@example.com / admin"
+echo "📋 To upload images, use: /data/local-files/?d=images/filename.jpg"
