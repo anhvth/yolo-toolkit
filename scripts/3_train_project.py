@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """
-Script 4: Export Annotations in YOLO Format
-Exports labeled data from Label Studio in YOLO format for training.
+Script 4: Export & Train - Export annotations from Label Studio and train YOLO model
+Combines export and training into a single workflow.
+Usage: python scripts/4_train.py --model yolo11n.pt --project 2
 """
 
+import argparse
 import json
 import os
 import sys
 import time
 from pathlib import Path
 from label_studio_sdk import LabelStudio
-from config import get_config
-from dotenv import load_dotenv
-load_dotenv()
+from label_studio_sdk_wrapper.config import get_config
+
 
 def convert_to_yolo_format(exported_json, output_dir="yolo_dataset", image_base_dir=None, train_split=0.8):
     """
@@ -41,7 +42,6 @@ def convert_to_yolo_format(exported_json, output_dir="yolo_dataset", image_base_
     # Collect unique labels to assign class ids
     labels = {}
     next_class_id = 0
-    converted_count = 0
     train_count = 0
     val_count = 0
 
@@ -104,7 +104,6 @@ def convert_to_yolo_format(exported_json, output_dir="yolo_dataset", image_base_
         if yolo_lines:
             with open(labels_dir / label_file, "w") as f:
                 f.write("\n".join(yolo_lines))
-            converted_count += 1
             if is_train:
                 train_count += 1
             else:
@@ -130,25 +129,29 @@ names: {list(labels.keys())}
             f.write(f"{idx}: {label}\n")
 
     print(f"✅ Created YOLO dataset in '{output_dir}'")
-    print(f"   📊 Train: {train_count} images")
-    print(f"   📊 Val: {val_count} images")
+    print(f"   📊 Train: {train_count} images | Val: {val_count} images")
     print(f"   📋 Classes ({len(labels)}): {', '.join(labels.keys())}")
-    print(f"   📝 Config: {output_path / 'data.yaml'}")
     
-    return labels
+    return str(output_path / "data.yaml")
 
 
-def export_yolo(project_id=None, export_dir=None):
-    """Export annotations from Label Studio in YOLO format"""
-    
-    config = get_config()
-    
-    if not config.ls_api_key:
-        print("❌ Error: LABEL_STUDIO_API_KEY not found in ls_settings.json")
+def export_annotations(project_id, export_dir, image_base_dir):
+    """Export annotations from Label Studio"""
+    try:
+        config = get_config()
+    except FileNotFoundError as e:
+        print(str(e))
+        sys.exit(1)
+    except json.JSONDecodeError:
+        print("❌ Error: Invalid JSON in ls_settings.json")
+        print("💡 Check the JSON syntax in your settings file")
         sys.exit(1)
     
-    project_id = project_id or config.project_id
-    export_dir = export_dir or config.export_dir
+    if not config.ls_api_key:
+        print("❌ Error: LABEL_STUDIO_API_KEY not set in ls_settings.json")
+        print("💡 Get your API key from Label Studio UI → Account & Settings → Access Token")
+        sys.exit(1)
+    
     export_path = Path(export_dir)
     export_path.mkdir(parents=True, exist_ok=True)
     
@@ -156,23 +159,21 @@ def export_yolo(project_id=None, export_dir=None):
     
     try:
         client = LabelStudio(base_url=config.ls_url, api_key=config.ls_api_key)
-        
         print(f"📦 Exporting annotations from project {project_id}...")
         
-        # Snapshot-based export (your working code)
+        # Create export job
         export_job = client.projects.exports.create(id=project_id, title="YOLO Export")
         export_id = export_job.id
         
-        # Poll until export_job.status becomes 'completed'
+        # Wait for completion
         print("   Waiting for export to complete...", end="", flush=True)
         while client.projects.exports.get(id=project_id, export_pk=export_id).status != 'completed':
             print(".", end="", flush=True)
             time.sleep(1)
         print(" Done!")
         
-        # Download the snapshot as JSON
+        # Download JSON
         json_file = export_path / f"project_{project_id}_{export_id}.json"
-        print(f"   Downloading to {json_file}...")
         with open(json_file, "wb") as f:
             for chunk in client.projects.exports.download(
                 id=project_id,
@@ -182,61 +183,151 @@ def export_yolo(project_id=None, export_dir=None):
             ):
                 f.write(chunk)
         
-        # Load the JSON data
-        print(f"   Loading JSON data...")
+        # Load data
         with open(json_file, "r") as f:
             data = json.load(f)
         
         if not data:
             print("⚠️  No annotations found to export")
+            print("💡 Label some images in Label Studio first")
             sys.exit(1)
         
         print(f"✅ Downloaded {len(data)} tasks")
         
-        # Convert to YOLO format with dataset structure
+        # Convert to YOLO format
         yolo_dir = export_path / "yolo_dataset"
         print(f"\n🔄 Converting to YOLO dataset format...")
+        data_yaml = convert_to_yolo_format(data, str(yolo_dir), image_base_dir=image_base_dir)
         
-        # Get image base directory from config
-        image_base_dir = config.image_dir
-        labels = convert_to_yolo_format(data, str(yolo_dir), image_base_dir=image_base_dir)
-        
-        # Save JSON for reference
-        json_export_file = export_path / "export.json"
-        with open(json_export_file, "w") as f:
-            json.dump(data, f, indent=2)
-        print(f"💾 Saved JSON export to: {json_export_file}")
-        
-        print(f"\n✅ Export completed successfully!")
-        print(f"   📁 Dataset: {yolo_dir}/")
-        print(f"   📁 Structure:")
-        print(f"      ├── images/")
-        print(f"      │   ├── train/  (symlinks)")
-        print(f"      │   └── val/    (symlinks)")
-        print(f"      ├── labels/")
-        print(f"      │   ├── train/")
-        print(f"      │   └── val/")
-        print(f"      ├── data.yaml")
-        print(f"      └── classes.txt")
-        
-        print(f"\n💡 Next steps:")
-        print(f"   1. Review the dataset: {yolo_dir}")
-        print(f"   2. Train with: python scripts/5_train_yolo.py --data {yolo_dir}/data.yaml")
+        return data_yaml
         
     except Exception as e:
         print(f"❌ Error exporting annotations: {e}")
+        if "401" in str(e).lower():
+            print("💡 Check your API key - it may be expired or incorrect")
+        elif "404" in str(e).lower():
+            print("💡 Check the project ID - the project may not exist")
+        elif "connection" in str(e).lower():
+            print("💡 Check Label Studio URL and ensure the server is running")
+        sys.exit(1)
+
+
+def train_yolo(model_path, data_yaml, epochs, image_size, output_model_path):
+    """Train YOLO model"""
+    try:
+        from ultralytics import YOLO
+    except ImportError:
+        print("❌ Error: ultralytics package not installed")
+        print("💡 Install it with: pip install ultralytics")
+        sys.exit(1)
+    
+    data_path = Path(data_yaml)
+    if not data_path.exists():
+        print(f"❌ Error: {data_yaml} not found!")
+        sys.exit(1)
+    
+    print(f"\n🚀 Starting YOLO training...")
+    print(f"   Model: {model_path}")
+    print(f"   Data: {data_yaml}")
+    print(f"   Epochs: {epochs}")
+    print(f"   Image Size: {image_size}")
+    
+    try:
+        model = YOLO(model_path)
+        results = model.train(
+            data=str(data_path),
+            epochs=epochs,
+            imgsz=image_size,
+            project="runs/detect",
+            name="train",
+            exist_ok=True
+        )
+        
+        print("\n✅ Training completed successfully!")
+        
+        # Find the latest training run
+        runs_dir = Path("runs/detect")
+        train_dirs = sorted(runs_dir.glob("train*"), key=lambda x: x.stat().st_mtime)
+        if train_dirs:
+            latest_run = train_dirs[-1]
+            best_model = latest_run / "weights" / "best.pt"
+            
+            if best_model.exists():
+                # Copy to output path
+                output_path = Path(output_model_path)
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                import shutil
+                shutil.copy(best_model, output_path)
+                print(f"📋 Best model saved to: {output_path}")
+                print(f"📁 Training results: {latest_run}")
+            
+        return True
+        
+    except Exception as e:
+        print(f"❌ Training failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
 
 
-if __name__ == "__main__":
-    import argparse
+def main():
+    parser = argparse.ArgumentParser(
+        description="Export Label Studio annotations and train YOLO model",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python scripts/4_train.py --model yolo11n.pt --project 2
+  python scripts/4_train.py --model yolo11n.pt --project 2 --epochs 50
+        """
+    )
+    parser.add_argument("--model", required=True, help="YOLO model path (e.g., yolo11n.pt)")
+    parser.add_argument("--project", type=int, required=True, help="Label Studio project ID")
+    parser.add_argument("--epochs", type=int, help="Training epochs (default: from config)")
+    parser.add_argument("--imgsz", type=int, help="Image size (default: from config)")
+    parser.add_argument("--output", help="Output model path (default: from config)")
     
-    parser = argparse.ArgumentParser(description="Export YOLO format annotations")
-    parser.add_argument("--project-id", type=int, help="Label Studio project ID")
-    parser.add_argument("--export-dir", help="Directory to save exports")
-    parser.add_argument("--train-split", type=float, default=0.8, help="Train/val split ratio (default: 0.8)")
     args = parser.parse_args()
     
-    export_yolo(args.project_id, args.export_dir)
+    # Load config
+    try:
+        config = get_config()
+    except Exception as e:
+        print(f"❌ Error loading configuration: {e}")
+        sys.exit(1)
+    
+    # Use config defaults if not specified
+    epochs = args.epochs or config.epochs
+    image_size = args.imgsz or config.image_size
+    output_model = args.output or config.updated_model_path
+    
+    print("=" * 60)
+    print("🎯 Export & Train Pipeline")
+    print("=" * 60)
+    
+    # Step 1: Export annotations
+    data_yaml = export_annotations(
+        project_id=args.project,
+        export_dir=config.export_dir,
+        image_base_dir=config.image_dir
+    )
+    
+    # Step 2: Train model
+    train_yolo(
+        model_path=args.model,
+        data_yaml=data_yaml,
+        epochs=epochs,
+        image_size=image_size,
+        output_model_path=output_model
+    )
+    
+    print("\n" + "=" * 60)
+    print("✅ Pipeline completed successfully!")
+    print("=" * 60)
+    print(f"💡 Next steps:")
+    print(f"   - Review results in runs/detect/train*/")
+    print(f"   - Use model: {output_model}")
+    print(f"   - Run predictions: python scripts/6_predict_unlabeled.py")
+
+
+if __name__ == "__main__":
+    main()

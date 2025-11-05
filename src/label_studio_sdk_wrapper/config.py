@@ -153,8 +153,7 @@ class Config:
 
 
 # Singleton instance for convenience
-_config = None
-
+_config: Optional[Config] = None
 def get_config(config_path: Optional[str] = None) -> Config:
     """
     Get or create the global configuration instance
@@ -167,5 +166,9 @@ def get_config(config_path: Optional[str] = None) -> Config:
     """
     global _config
     if _config is None:
+        if config_path is None:
+            # Find project root (go up from scripts/ to project root)
+            project_dir = Path(__file__).parents[2]
+            config_path = str(project_dir / "ls_settings.json")
         _config = Config(config_path)
     return _config

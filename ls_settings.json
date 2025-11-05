@@ -1,13 +1,13 @@
 {
   "label_studio": {
     "url": "http://localhost:8080",
-    "api_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6ODA2OTUxMjczOSwiaWF0IjoxNzYyMzEyNzM5LCJqdGkiOiIyYjY1ODZiMjI5Njg0NDRkOWYzYTJjMjdjNGI4YjI4MiIsInVzZXJfaWQiOiIxIn0.ZtlXdkP7DAeKCU75bkm9S787mupFEM1OOKbLw1vzTsM",
-    "project_id": 2,
+    "api_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6ODA2OTUzMDYxOCwiaWF0IjoxNzYyMzMwNjE4LCJqdGkiOiJjOGM5NWEwYTRiYTM0MjA5OWFkODQyZDQ1NDI1NGVjZiIsInVzZXJfaWQiOiIxIn0.EearxGimbna6SRTUt6MUKg15Vzmbi3m-0rn95N2x4Fk",
+    "project_id": 13,
     "local_files_serving_enabled": true,
     "local_files_document_root": "./data"
   },
   "paths": {
-    "image_dir": "data/train",
+    "image_dir": "data/images",
     "export_dir": "data/exports",
     "predictions_dir": "data/predictions",
     "base_model_path": "models/base_model.pt",
@@ -33,7 +33,7 @@
     "model_name": "yolo11s.pt",
     "available_models": {
       "nano": "yolo11n.pt",
-      "small": "yolo11s.pt", 
+      "small": "yolo11s.pt",
       "medium": "yolo11m.pt",
       "large": "yolo11l.pt",
       "xlarge": "yolo11x.pt"
@@ -46,7 +46,7 @@
         "image_size": 416
       },
       "balanced": {
-        "model": "small", 
+        "model": "small",
         "epochs": 10,
         "batch_size": 16,
         "image_size": 640

@@ -7,7 +7,7 @@ Deletes a Label Studio project by ID or title.
 import sys
 from pathlib import Path
 from label_studio_sdk import LabelStudio
-from config import get_config
+from label_studio_sdk_wrapper.config import get_config
 
 def delete_project(project_id=None, project_title=None, confirm=True):
     """Delete a Label Studio project"""

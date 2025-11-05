@@ -1,41 +1,116 @@
 #!/usr/bin/env python3
 """
-Script 1: Start Label Studio Server
-This script launches Label Studio locally (for non-Docker setups).
-For Docker users, use: docker compose up
+Initialize and start Label Studio with local file serving enabled.
+
+This script:
+1. Sets up environment variables for local file serving
+2. Starts Label Studio with admin credentials
+3. Uses the project's data directory as the document root
 """
 
 import os
+import subprocess
 import sys
 from pathlib import Path
-from config import get_config
 
-def start_labelstudio():
-    """Start Label Studio server with local file serving enabled"""
+
+def get_project_root() -> Path:
+    """Get the absolute path to the project root directory."""
+    return Path(__file__).parent.absolute()
+
+
+def setup_environment(project_root: Path) -> dict[str, str]:
+    """
+    Configure environment variables for Label Studio.
     
-    # Get configuration from ls_settings.json
-    config = get_config()
-    project_root = Path(__file__).parent.parent.absolute()
+    Args:
+        project_root: Path to the project root directory
+        
+    Returns:
+        Dictionary of environment variables to set
+    """
     data_dir = project_root / "data"
     
-    # Set required environment variables for local file serving
-    os.environ['LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED'] = str(config.local_files_serving_enabled).lower()
-    os.environ['LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT'] = config.local_files_document_root or str(data_dir)
+    env_vars = {
+        "LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED": "true",
+        "LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT": str(data_dir),
+    }
     
-    print("🚀 Starting Label Studio server...")
-    print("Note: If using Docker, run 'docker compose up' instead")
-    print(f"\n📂 Local files directory: {data_dir}")
-    print(f"   - Images at: {data_dir}/images")
-    print(f"   - This allows Label Studio to serve local image files")
-    print("\n🔗 Access Label Studio at: http://localhost:8080")
-    print("\nPress Ctrl+C to stop the server\n")
+    return env_vars
+
+
+def start_label_studio(
+    project_root: Path,
+    username: str = "admin@example.com",
+    password: str = "admin",
+    data_dir: str = "label_studio_data"
+) -> None:
+    """
+    Start Label Studio server with specified configuration.
     
-    # Start label-studio with environment variables set
-    os.system("label-studio start")
+    Args:
+        project_root: Path to the project root directory
+        username: Admin username (default: admin@example.com)
+        password: Admin password (default: admin)
+        data_dir: Directory for Label Studio data (default: label_studio_data)
+        
+    Raises:
+        FileNotFoundError: If label-studio command is not found
+        subprocess.CalledProcessError: If label-studio fails to start
+    """
+    # Setup environment
+    env_vars = setup_environment(project_root)
+    env = os.environ.copy()
+    env.update(env_vars)
+    
+    # Change to project root
+    os.chdir(project_root)
+    
+    # Prepare command
+    cmd = [
+        "label-studio",
+        "start",
+        "--username", username,
+        "--password", password,
+        "--data-dir", data_dir,
+    ]
+    
+    print("🚀 Starting Label Studio...")
+    print(f"📁 Project root: {project_root}")
+    print(f"📂 Data directory: {project_root / data_dir}")
+    print(f"🗂️  Document root: {env_vars['LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT']}")
+    print()
+    
+    try:
+        # Start Label Studio
+        subprocess.run(cmd, env=env, check=True)
+    except FileNotFoundError:
+        print("❌ Error: label-studio command not found")
+        print("\n📋 Steps to fix:")
+        print("1. Install Label Studio: pip install label-studio")
+        print("2. Or activate your virtual environment")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Error: Label Studio failed to start: {e}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\n\n✅ Label Studio stopped")
+        print("👤 Admin user: admin@example.com / admin")
+        print("📋 To upload images, use: /data/local-files/?d=images/filename.jpg")
+        sys.exit(0)
+
+
+def main() -> None:
+    """Main entry point for the script."""
+    project_root = get_project_root()
+    
+    print("=" * 60)
+    print("Label Studio Initialization")
+    print("=" * 60)
+    print()
+    
+    start_label_studio(project_root)
+
 
 if __name__ == "__main__":
-    try:
-        start_labelstudio()
-    except KeyboardInterrupt:
-        print("\n\n✅ Label Studio server stopped")
-        sys.exit(0)
+    main()
