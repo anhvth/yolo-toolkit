@@ -89,6 +89,24 @@ class Config:
         """Path to updated/fine-tuned YOLO model"""
         return self._config["paths"]["updated_model_path"]
     
+    # Project config    
+    @property
+    def project_title(self) -> str:
+        """Title of the Label Studio project"""
+        return self._config["project"]["title"]
+    @property
+    def labels(self) -> list:
+        """List of object detection labels"""
+        return self._config["project"]["labels"]
+    @property
+    def allow_duplicate(self) -> bool:
+        """Whether to allow duplicate projects"""
+        return self._config["project"]["allow_duplicate"]
+    @property
+    def force(self) -> bool:
+        """Whether to force project creation"""
+        return self._config["project"]["force"]
+
     # YOLO settings
     @property
     def epochs(self) -> int:
@@ -116,6 +134,18 @@ class Config:
         with open(self.config_path, 'w') as f:
             json.dump(self._config, f, indent=2)
         print(f"✅ Updated PROJECT_ID={project_id} in {self.config_path}")
+    
+    def update_api_key(self, api_key: str):
+        """
+        Update API key in the settings file
+        
+        Args:
+            api_key: New API key to save
+        """
+        self._config["label_studio"]["api_key"] = api_key
+        with open(self.config_path, 'w') as f:
+            json.dump(self._config, f, indent=2)
+        print(f"✅ Updated API key in {self.config_path}")
     
     def get_raw(self) -> Dict[str, Any]:
         """Get raw configuration dictionary"""

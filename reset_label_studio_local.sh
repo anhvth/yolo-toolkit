@@ -7,7 +7,7 @@ PROJECT_ROOT="$SCRIPT_DIR"
 echo "Project root: $PROJECT_ROOT"
 cd "$PROJECT_ROOT"
 export LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true
-export LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/Users/anhvth/projects/yolo-labelstuio-kits/
+export LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/mnt/disk1/khaipt4/project/yolo-toolkit/data/
 label-studio start --username admin@example.com --password admin --data-dir label_studio_data
 
 echo ""

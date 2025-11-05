@@ -5,10 +5,6 @@ from label_studio_sdk.client import LabelStudio
 from config import get_config
 
 def main():
-    parser = argparse.ArgumentParser(description="Import local images to Label Studio (local storage)")
-    parser.add_argument("--image_dir", help="Local image directory (overrides config)")
-    args = parser.parse_args()
-
     config = get_config()
     
     LABEL_STUDIO_URL = config.ls_url
@@ -18,9 +14,9 @@ def main():
     if not LABEL_STUDIO_API_KEY:
         raise RuntimeError("LABEL_STUDIO_API_KEY is missing in ls_settings.json")
 
-    # Use command-line arg or config value
-    image_dir = args.image_dir or config.image_dir
-    
+    # image_dir read from ls_settings.json
+    image_dir = config.image_dir
+
     if not os.path.isdir(image_dir):
         raise FileNotFoundError(f"Directory not found: {image_dir}")
 
@@ -37,7 +33,6 @@ def main():
             print(f"   Storage ID: {existing.id}")
             print(f"   Skipping duplicate import. Use a different path or delete the existing storage first.")
             return
-
     # Create local import storage (same API family you wrote)
     storage = ls.import_storage.local.create(
         project=PROJECT_ID,
@@ -47,6 +42,15 @@ def main():
         regex_filter=r".*.(jpe?g|png|gif)$",
     )
     
+
+    print("\n🔄 Syncing storage to import images...")
+    try:
+        ls.import_storage.local.sync(id=storage.id)
+        print("✅ Sync complete! Images should now be visible in Label Studio.")
+    except Exception as e:
+        print(f"❌ Error during sync: {e}")
+        print("💡 You may need to manually sync in the Label Studio UI")
+        print(f"   Go to: {LABEL_STUDIO_URL}/projects/{PROJECT_ID}/settings/storage")
 
     print(f"✅ Imported {path} into project {PROJECT_ID}")
     print(f"   Storage ID: {storage.id}")

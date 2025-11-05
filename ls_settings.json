@@ -1,21 +1,62 @@
 {
   "label_studio": {
     "url": "http://localhost:8080",
-    "api_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6ODA2OTUxMDIyMiwiaWF0IjoxNzYyMzEwMjIyLCJqdGkiOiJiYmE4NjY5MTE4OGI0ZTRmYmMzNTEzNjYzZjhiMTMyMiIsInVzZXJfaWQiOiIxIn0.NB1i2GAzfFQDDHg8DQ-YY4qqwTt5V-Ep6UXTNKi-E4U",
-    "project_id": 4,
+    "api_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6ODA2OTUxMjczOSwiaWF0IjoxNzYyMzEyNzM5LCJqdGkiOiIyYjY1ODZiMjI5Njg0NDRkOWYzYTJjMjdjNGI4YjI4MiIsInVzZXJfaWQiOiIxIn0.ZtlXdkP7DAeKCU75bkm9S787mupFEM1OOKbLw1vzTsM",
+    "project_id": 2,
     "local_files_serving_enabled": true,
-    "local_files_document_root": "/Users/anhvth/projects/yolo-labelstuio-kits/data"
+    "local_files_document_root": "./data"
   },
   "paths": {
-    "image_dir": "data/images",
+    "image_dir": "data/train",
     "export_dir": "data/exports",
     "predictions_dir": "data/predictions",
     "base_model_path": "models/base_model.pt",
     "updated_model_path": "models/updated_model.pt"
   },
+  "project": {
+    "labels": [
+      "Plate",
+      "Car",
+      "Bicycle",
+      "Motorcycle",
+      "Person"
+    ],
+    "title": "ReID",
+    "allow_duplicate": false,
+    "force": true
+  },
   "yolo": {
-    "epochs": 30,
+    "epochs": 100,
     "image_size": 640,
-    "model_score_threshold": 0.25
+    "batch_size": 16,
+    "model_score_threshold": 0.25,
+    "model_name": "yolo11s.pt",
+    "available_models": {
+      "nano": "yolo11n.pt",
+      "small": "yolo11s.pt", 
+      "medium": "yolo11m.pt",
+      "large": "yolo11l.pt",
+      "xlarge": "yolo11x.pt"
+    },
+    "training_presets": {
+      "quick": {
+        "model": "nano",
+        "epochs": 5,
+        "batch_size": 32,
+        "image_size": 416
+      },
+      "balanced": {
+        "model": "small", 
+        "epochs": 10,
+        "batch_size": 16,
+        "image_size": 640
+      },
+      "production": {
+        "model": "medium",
+        "epochs": 15,
+        "batch_size": 8,
+        "image_size": 640
+      }
+    }
   }
 }
