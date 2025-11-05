@@ -62,3 +62,4 @@ Thumbs.db
 data/
 label_studio_data/
 yolo11n.pt
+*.pt

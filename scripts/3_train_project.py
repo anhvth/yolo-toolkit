@@ -12,6 +12,7 @@ import sys
 import time
 from pathlib import Path
 from label_studio_sdk import LabelStudio
+import torch
 from label_studio_sdk_wrapper.config import get_config
 
 
@@ -240,7 +241,8 @@ def train_yolo(model_path, data_yaml, epochs, image_size, output_model_path):
             imgsz=image_size,
             project="runs/detect",
             name="train",
-            exist_ok=True
+            exist_ok=True,
+            device='mps' if torch.backends.mps.is_available() else 'cpu'
         )
         
         print("\n✅ Training completed successfully!")
