@@ -18,7 +18,7 @@ from label_studio_sdk_wrapper.config import get_config
 from label_studio_sdk_wrapper.inference_roi_moto_plate import REGISTERED_PIPELINES
 from tqdm.asyncio import tqdm as async_tqdm
 
-DEBUG_TASKS = [233]
+DEBUG_TASKS = None
 
 def is_submitted(task):
     """Return True if the task has manual annotation (submitted by user)."""
@@ -276,8 +276,27 @@ def predict_unlabeled(
 
                 H, W = img.shape[:2]
 
-                # Run model
-                preds = model.run_on_image(img[..., ::-1], path=img_path)
+                # Run model - returns Results object for both standard and custom pipelines
+                results = model(img[..., ::-1], path=img_path)
+
+                # Get predictions in normalized format
+                if use_custom_pipeline:
+                    # Custom pipeline stores filtered predictions in results.filtered_preds
+                    preds = results.filtered_preds if hasattr(results, 'filtered_preds') else []
+                else:
+                    # Standard YOLO - extract from boxes
+                    boxes = results.boxes
+                    preds = []
+                    for j in range(len(boxes)):
+                        cls_id = int(boxes.cls[j].item())
+                        conf = float(boxes.conf[j].item())
+                        xyxy = boxes.xyxy[j].cpu().numpy()
+                        x1, y1, x2, y2 = xyxy
+                        cx = (x1 + x2) / 2 / W
+                        cy = (y1 + y2) / 2 / H
+                        bw = (x2 - x1) / W
+                        bh = (y2 - y1) / H
+                        preds.append([cls_id, cx, cy, bw, bh, conf])
 
                 if not preds:
                     continue
@@ -352,6 +371,7 @@ def predict_unlabeled(
                 async def upload_with_semaphore(pred_info):
                     async with semaphore:
                         try:
+                            
                             await asyncio.to_thread(
                                 client.predictions.create,
                                 task=pred_info["task_id"],
@@ -359,6 +379,8 @@ def predict_unlabeled(
                                 score=pred_info["score"],
                                 model_version=pred_info["model_version"]
                             )
+                            url = f'http://localhost:8080/projects/{project_id}/data?tab=1&task={pred_info["task_id"]}'
+                            print(f"✓ Uploaded prediction for task {pred_info['task_id']}: {url}")
                             return True, pred_info["task_id"], pred_info["img_name"]
                         except Exception as e:
                             return False, pred_info["task_id"], str(e)

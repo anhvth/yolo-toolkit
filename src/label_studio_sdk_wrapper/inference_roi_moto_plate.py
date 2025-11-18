@@ -1,9 +1,23 @@
 # pipeline.py
 from pathlib import Path
+from unittest import result
 
 import cv2
 import numpy as np
 from ultralytics import YOLO
+import ultralytics
+
+# ============================================================
+# Configuration Parameters
+# ============================================================
+DEFAULT_IMG_SIZE = 640
+DEFAULT_ROI_CONF_THRES = 0.25
+DEFAULT_VEH_CONF_THRES = 0.25
+DEFAULT_PLATE_CONF_THRES = 0.1
+
+DEFAULT_ROI_CLASS_NAME = 'ROI'
+DEFAULT_VEHICLE_CLASS_NAMES = ('motobike', 'xedap')
+DEFAULT_PLATE_CLASS_NAME = 'bienso'
 
 # Fixed palette; we index with class_id % len(colors)
 colors = [
@@ -34,12 +48,13 @@ class SingleYoloPipeline:
     def __init__(
         self,
         model_path,
-        img_size: int = 640,
-        roi_class_name: str = "ROI",
-        vehicle_class_names=("motobike", "xedap"),
-        plate_class_name: str = "bienso",
-        roi_conf_thres: float = 0.25,
-        veh_conf_thres: float = 0.25,
+        img_size: int = DEFAULT_IMG_SIZE,
+        roi_class_name: str = DEFAULT_ROI_CLASS_NAME,
+        vehicle_class_names=DEFAULT_VEHICLE_CLASS_NAMES,
+        plate_class_name: str = DEFAULT_PLATE_CLASS_NAME,
+        roi_conf_thres: float = DEFAULT_ROI_CONF_THRES,
+        veh_conf_thres: float = DEFAULT_VEH_CONF_THRES,
+        plate_conf_thres: float = DEFAULT_PLATE_CONF_THRES,
     ):
         self.model = YOLO(model_path)
         self.img_size = img_size
@@ -57,6 +72,7 @@ class SingleYoloPipeline:
         # Thresholds
         self.roi_conf_thres = roi_conf_thres
         self.veh_conf_thres = veh_conf_thres
+        self.plate_conf_thres = plate_conf_thres
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -85,18 +101,18 @@ class SingleYoloPipeline:
     # ------------------------------------------------------------------
     def predict(self, img):
         """
-        Run YOLO and return raw xyxy, cls, conf for one image.
+        Run YOLO and return the full Results object.
         """
-        pred = self.model.predict(img, imgsz=self.img_size, verbose=False, conf=0.1)[0]
-        xyxy = pred.boxes.xyxy.cpu().numpy()
-        cls = pred.boxes.cls.cpu().numpy().astype(int)
-        conf = pred.boxes.conf.cpu().numpy()
+        pred = self.model.predict(img, imgsz=self.img_size, verbose=False, conf=0.001)[0]
+        return pred
 
-        return xyxy, cls, conf
-
-    def postproc(self, xyxy, cls, conf, H, W, expect_plate: bool):
+    def postproc(self, results: ultralytics.engine.results.Results, expect_plate: bool):
         """
         Convert model outputs → filtered YOLO-format predictions.
+
+        Args:
+            results: ultralytics Results object
+            expect_plate: whether to look for plate inside vehicle
 
         Output: list of [class_id, cx, cy, w, h, score]
 
@@ -105,7 +121,14 @@ class SingleYoloPipeline:
           - 1 vehicle (best motobike/xedap over veh_conf_thres)
           - If expect_plate and a plate is inside vehicle -> 1 plate
         """
+        # Extract data from Results object
+        xyxy = results.boxes.xyxy.cpu().numpy()
+        cls = results.boxes.cls.cpu().numpy().astype(int)
+        conf = results.boxes.conf.cpu().numpy()
+        H, W = results.orig_shape
+        
         out = []
+        is_weird = False
 
         # =========================================================
         # 1) Pick BEST ROI
@@ -161,13 +184,12 @@ class SingleYoloPipeline:
         # =========================================================
         if expect_plate:
             bx1, by1, bx2, by2 = vx1, vy1, vx2, vy2
-            print(f'Found plate with score {conf[best_veh_i]:.2f} inside vehicle bbox {bx1, by1, bx2, by2}')
 
             plate_indices = []
             for i, c in enumerate(cls):
                 if c != self.plate_cls_id:
                     continue
-                if conf[i] < 0.1:
+                if conf[i] < self.plate_conf_thres:
                     continue
 
                 px1, py1, px2, py2 = xyxy[i]
@@ -187,30 +209,36 @@ class SingleYoloPipeline:
                 p_h = (py2 - py1) / H
 
                 out.append([self.plate_cls_id, p_cx, p_cy, p_w, p_h, plate_conf])
+            else:
+                # this is weird case: expect plate but none found inside vehicle
+                is_weird = True
+        return out, is_weird
 
-        return out
-
-    def run_on_image(self, img, path=None):
+    def __call__(self, img, path=None) -> ultralytics.engine.results.Results:
         """
         Main inference method compatible with standard YOLO API.
-        Returns list of [class_id, cx, cy, w, h, score] in normalized format.
+        Returns ultralytics Results object with filtered predictions.
         
         path is used only to decide whether we expect a plate.
         Example: expect plate if '_left' in path.
         """
-        H, W = img.shape[:2]
-        xyxy, cls, conf = self.predict(img)
-        
+        results = self.predict(img)
 
         expect_plate = False
         if path is not None:
             expect_plate = "_left" in str(path)
 
-        return self.postproc(xyxy, cls, conf, H, W, expect_plate=expect_plate)
+        # Get filtered predictions in normalized format
+        filtered_preds, is_weird = self.postproc(results, expect_plate=expect_plate)
+        if is_weird:
+            print(f"⚠️  Weird case detected for image {path}: expect_plate={expect_plate} but no plate found inside vehicle.")
+            
+        
+        # Store filtered predictions as attribute for easy access
+        results.filtered_preds = filtered_preds
+        
+        return results
 
-    def __call__(self, img, path=None):
-        """Alias for run_on_image for compatibility."""
-        return self.run_on_image(img, path)
 
     def visualize(self, img, preds, thickness: int = 3):
         """
