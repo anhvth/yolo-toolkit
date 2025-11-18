@@ -16,7 +16,7 @@ from pathlib import Path
 
 def get_project_root() -> Path:
     """Get the absolute path to the project root directory."""
-    return Path(__file__).parent.absolute()
+    return Path(__file__).parents[1].absolute()
 
 
 def setup_environment(project_root: Path) -> dict[str, str]:
@@ -29,7 +29,7 @@ def setup_environment(project_root: Path) -> dict[str, str]:
     Returns:
         Dictionary of environment variables to set
     """
-    data_dir = project_root / "data"
+    data_dir = project_root# / "data"
     
     env_vars = {
         "LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED": "true",
@@ -61,6 +61,7 @@ def start_label_studio(
     # Setup environment
     env_vars = setup_environment(project_root)
     env = os.environ.copy()
+    env['LABEL_STUDIO_WORKER_COUNT'] = '16'
     env.update(env_vars)
     
     # Change to project root

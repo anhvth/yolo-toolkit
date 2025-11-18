@@ -63,3 +63,16 @@ data/
 label_studio_data/
 yolo11n.pt
 *.pt
+
+# Jupyter Notebook
+experiment/
+vlm/vehicle_driver_features.csv
+.ipynb_checkpoints/
+project*.json
+# scripts/build_1stage_dataset.py
+# scripts/create_user.sh
+# scripts/human_car_yolo_detect.py
+# scripts/predict_and_crop.py
+# scripts/predict_roi_vehicle.py
+visualize.ipynb
+vlm/

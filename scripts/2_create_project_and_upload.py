@@ -9,8 +9,8 @@ import os
 import sys
 from pathlib import Path
 from label_studio_sdk import LabelStudio
-from config import get_config
-from config_label import build_label_config
+from label_studio_sdk_wrapper.config import get_config
+from label_studio_sdk_wrapper.config_label import build_label_config
 
 
 def prompt_for_api_key(config):

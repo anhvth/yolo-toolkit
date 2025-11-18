@@ -1,27 +1,26 @@
 {
   "label_studio": {
     "url": "http://localhost:8080",
-    "api_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6ODA2OTUzMDYxOCwiaWF0IjoxNzYyMzMwNjE4LCJqdGkiOiJjOGM5NWEwYTRiYTM0MjA5OWFkODQyZDQ1NDI1NGVjZiIsInVzZXJfaWQiOiIxIn0.EearxGimbna6SRTUt6MUKg15Vzmbi3m-0rn95N2x4Fk",
-    "project_id": 13,
+    "api_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6ODA2OTYwNTE3MSwiaWF0IjoxNzYyNDA1MTcxLCJqdGkiOiIxNGEzNTJjMDg3OGM0YTM4OWU4MTNiOGRlOTNlN2JlZSIsInVzZXJfaWQiOiIxIn0.HDK7REkhNl3KD447z7SUuQCW8G7o-CU34i4nb-Vr4S0",
+    "project_id": 8,
     "local_files_serving_enabled": true,
     "local_files_document_root": "./data"
   },
   "paths": {
-    "image_dir": "data/images",
-    "export_dir": "data/exports",
+    "image_dir": "data/low_score_roi/",
+    "export_dir": "data/low_score_roi_export/",
     "predictions_dir": "data/predictions",
     "base_model_path": "models/base_model.pt",
     "updated_model_path": "models/updated_model.pt"
   },
   "project": {
     "labels": [
-      "Plate",
-      "Car",
-      "Bicycle",
-      "Motorcycle",
-      "Person"
+      "ROI",
+      "motobike",
+      "xedap",
+      "bienso"
     ],
-    "title": "ReID",
+    "title": "ROI Detection-2",
     "allow_duplicate": false,
     "force": true
   },
@@ -29,7 +28,7 @@
     "epochs": 100,
     "image_size": 640,
     "batch_size": 16,
-    "model_score_threshold": 0.25,
+    "model_score_threshold": 0.75,
     "model_name": "yolo11s.pt",
     "available_models": {
       "nano": "yolo11n.pt",

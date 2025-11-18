@@ -16,18 +16,20 @@ import torch
 from label_studio_sdk_wrapper.config import get_config
 
 
-def convert_to_yolo_format(exported_json, output_dir="yolo_dataset", image_base_dir=None, train_split=0.8):
+def convert_to_yolo_format(exported_json, output_dir="yolo_dataset", image_base_dir=None, train_split=0.8, filter_cls_ids=None):
     """
     Convert Label Studio JSON export to YOLO format with proper dataset structure.
+    Only processes tasks with submitted annotations.
     
     Args:
-        exported_json: List of tasks from Label Studio export
+        exported_json: List of tasks from Label Studio export (should be pre-filtered for submitted tasks)
         output_dir: Directory to save YOLO dataset
         image_base_dir: Base directory where images are stored (for symlinks)
         train_split: Fraction of data for training (default 0.8 = 80% train, 20% val)
+        filter_cls_ids: List of class IDs to filter by (only include tasks with these classes)
     
     Returns:
-        dict with labels mapping
+        Path to data.yaml file
     """
     output_path = Path(output_dir)
     
@@ -46,13 +48,46 @@ def convert_to_yolo_format(exported_json, output_dir="yolo_dataset", image_base_
     train_count = 0
     val_count = 0
 
+    # Filter tasks by class IDs if specified
+    filtered_json = exported_json
+    if filter_cls_ids is not None:
+        # First pass: collect all labels to build label mapping
+        for task in exported_json:
+            for ann in task.get("annotations", []):
+                for r in ann.get("result", []):
+                    if r["type"] == "rectanglelabels":
+                        label_name = r["value"]["rectanglelabels"][0]
+                        if label_name not in labels:
+                            labels[label_name] = next_class_id
+                            next_class_id += 1
+        
+        # Second pass: filter tasks by class IDs
+        filtered_json = []
+        for task in exported_json:
+            task_cls_ids = set()
+            for ann in task.get("annotations", []):
+                for r in ann.get("result", []):
+                    if r["type"] == "rectanglelabels":
+                        label_name = r["value"]["rectanglelabels"][0]
+                        if label_name in labels:
+                            task_cls_ids.add(labels[label_name])
+            
+            # Check if task contains any of the requested class IDs
+            if task_cls_ids & set(filter_cls_ids):
+                filtered_json.append(task)
+        
+        print(f"   🔍 Filtered by class IDs {filter_cls_ids}: {len(filtered_json)}/{len(exported_json)} tasks")
+        if not filtered_json:
+            print("⚠️  No tasks match the specified class IDs")
+            sys.exit(1)
+    
     # Split data
     import random
     random.seed(42)
-    random.shuffle(exported_json)
-    split_idx = int(len(exported_json) * train_split)
+    random.shuffle(filtered_json)
+    split_idx = int(len(filtered_json) * train_split)
     
-    for idx, task in enumerate(exported_json):
+    for idx, task in enumerate(filtered_json):
         is_train = idx < split_idx
         images_dir = train_images_dir if is_train else val_images_dir
         labels_dir = train_labels_dir if is_train else val_labels_dir
@@ -136,7 +171,7 @@ names: {list(labels.keys())}
     return str(output_path / "data.yaml")
 
 
-def export_annotations(project_id, export_dir, image_base_dir):
+def export_annotations(project_id, export_dir, image_base_dir, filter_cls_ids=None):
     """Export annotations from Label Studio"""
     try:
         config = get_config()
@@ -154,6 +189,14 @@ def export_annotations(project_id, export_dir, image_base_dir):
         sys.exit(1)
     
     export_path = Path(export_dir)
+    
+    # Remove old export directory if it exists
+    if export_path.exists():
+        import shutil
+        print(f"🗑️  Removing old export directory: {export_path}")
+        shutil.rmtree(export_path)
+        print("   ✅ Old export directory removed")
+    
     export_path.mkdir(parents=True, exist_ok=True)
     
     print(f"🔗 Connecting to Label Studio at {config.ls_url}...")
@@ -195,10 +238,37 @@ def export_annotations(project_id, export_dir, image_base_dir):
         
         print(f"✅ Downloaded {len(data)} tasks")
         
+        # Filter for tasks with submitted annotations only
+        tasks_with_labels = []
+        for task in data:
+            # Check if task has annotations and they are completed
+            if task.get("annotations"):
+                for ann in task["annotations"]:
+                    # Check if annotation is completed and has actual results
+                    if not ann.get("was_cancelled", False) and ann.get("result"):
+                        # Check if there are actual bounding boxes
+                        has_boxes = any(
+                            r.get("type") == "rectanglelabels" 
+                            for r in ann.get("result", [])
+                        )
+                        if has_boxes:
+                            tasks_with_labels.append(task)
+                            break  # One valid annotation is enough
+        
+        if not tasks_with_labels:
+            print("⚠️  No submitted annotations found")
+            print(f"   Total tasks: {len(data)}, Tasks with labels: 0")
+            print("💡 Submit some annotations in Label Studio first")
+            sys.exit(1)
+        
+        print(f"   📝 Tasks with submitted labels: {len(tasks_with_labels)}/{len(data)}")
+        if len(tasks_with_labels) < len(data):
+            print(f"   ⏭️  Skipping {len(data) - len(tasks_with_labels)} unlabeled tasks")
+        
         # Convert to YOLO format
         yolo_dir = export_path / "yolo_dataset"
         print(f"\n🔄 Converting to YOLO dataset format...")
-        data_yaml = convert_to_yolo_format(data, str(yolo_dir), image_base_dir=image_base_dir)
+        data_yaml = convert_to_yolo_format(tasks_with_labels, str(yolo_dir), image_base_dir=image_base_dir, filter_cls_ids=filter_cls_ids)
         
         return data_yaml
         
@@ -213,8 +283,9 @@ def export_annotations(project_id, export_dir, image_base_dir):
         sys.exit(1)
 
 
-def train_yolo(model_path, data_yaml, epochs, image_size, output_model_path):
-    """Train YOLO model"""
+def train_yolo(model_path, data_yaml, epochs, image_size, output_model_path, 
+               lr0=1e-4, mosaic=0.5, batch=4, half=True, device=None, freeze_ratio=0.95, close_mosaic=10):
+    """Train YOLO model with configurable parameters"""
     try:
         from ultralytics import YOLO
     except ImportError:
@@ -227,14 +298,44 @@ def train_yolo(model_path, data_yaml, epochs, image_size, output_model_path):
         print(f"❌ Error: {data_yaml} not found!")
         sys.exit(1)
     
+    # Auto-detect device if not specified
+    if device is None:
+        device = 'mps' if torch.backends.mps.is_available() else 'cuda'
+    
     print(f"\n🚀 Starting YOLO training...")
     print(f"   Model: {model_path}")
     print(f"   Data: {data_yaml}")
     print(f"   Epochs: {epochs}")
     print(f"   Image Size: {image_size}")
+    print(f"   Learning Rate: {lr0}")
+    print(f"   Mosaic: {mosaic}")
+    print(f"   Close Mosaic: {close_mosaic}")
+    print(f"   Batch Size: {batch}")
+    print(f"   Half Precision: {half}")
+    print(f"   Device: {device}")
+    print(f"   Freeze Ratio: {freeze_ratio}")
     
     try:
         model = YOLO(model_path)
+        def frozen_model(model, ratio: float):
+            """
+            Freeze ratio (0~1) of parameters.
+            Example: ratio=0.8 -> freeze first 80% of params.
+            """
+            params = list(model.model.named_parameters())
+            total = len(params)
+            k = int(total * ratio)
+
+            for i, (name, p) in enumerate(params):
+                p.requires_grad = (i >= k)
+
+            print(f"Frozen {k}/{total} params ({ratio*100:.1f}%)")
+            return model
+        
+        # Apply model freezing if freeze_ratio > 0
+        if freeze_ratio > 0:
+            model = frozen_model(model, freeze_ratio)
+        
         results = model.train(
             data=str(data_path),
             epochs=epochs,
@@ -242,7 +343,12 @@ def train_yolo(model_path, data_yaml, epochs, image_size, output_model_path):
             project="runs/detect",
             name="train",
             exist_ok=True,
-            device='mps' if torch.backends.mps.is_available() else 'cpu'
+            lr0=lr0,
+            mosaic=mosaic,
+            close_mosaic=close_mosaic,
+            batch=batch,
+            half=half,
+            device=device
         )
         
         print("\n✅ Training completed successfully!")
@@ -280,15 +386,33 @@ def main():
 Examples:
   python scripts/4_train.py --model yolo11n.pt --project 2
   python scripts/4_train.py --model yolo11n.pt --project 2 --epochs 50
+  python scripts/4_train.py --project 2 --export-project-only
+  python scripts/4_train.py --model yolo11n.pt --project 2 --cls-ids 0 1 2
         """
     )
-    parser.add_argument("--model", required=True, help="YOLO model path (e.g., yolo11n.pt)")
+    parser.add_argument("--model", help="YOLO model path (e.g., yolo11n.pt)")
     parser.add_argument("--project", type=int, required=True, help="Label Studio project ID")
     parser.add_argument("--epochs", type=int, help="Training epochs (default: from config)")
     parser.add_argument("--imgsz", type=int, help="Image size (default: from config)")
     parser.add_argument("--output", help="Output model path (default: from config)")
+    parser.add_argument("--export-project-only", action="store_true", help="Only export annotations, skip training")
+    parser.add_argument("--cls-ids", type=int, nargs="+", default=None, help="Filter tasks by class IDs (only include tasks with these classes)")
+    
+    # Training hyperparameters
+    parser.add_argument("--lr0", type=float, default=1e-4, help="Initial learning rate (default: 1e-4)")
+    parser.add_argument("--mosaic", type=float, default=0.5, help="Mosaic augmentation probability (default: 0.5)")
+    parser.add_argument("--close-mosaic", type=int, default=10, help="Epochs to disable mosaic augmentation before end (default: 10)")
+    parser.add_argument("--batch", type=int, default=16, help="Batch size (default: 16)")
+    parser.add_argument("--half", action="store_true", default=True, help="Use half precision (FP16) training (default: True)")
+    parser.add_argument("--no-half", dest="half", action="store_false", help="Disable half precision training")
+    parser.add_argument("--device", type=str, default=None, help="Device to use (cuda/mps/cpu, default: auto-detect)")
+    parser.add_argument("--freeze-ratio", type=float, default=0.5, help="Ratio of parameters to freeze (0-1, default: 0.5)")
     
     args = parser.parse_args()
+    
+    # Validate arguments
+    if not args.export_project_only and not args.model:
+        parser.error("--model is required unless --export-project-only is specified")
     
     # Load config
     try:
@@ -303,15 +427,28 @@ Examples:
     output_model = args.output or config.updated_model_path
     
     print("=" * 60)
-    print("🎯 Export & Train Pipeline")
+    if args.export_project_only:
+        print("📦 Export Annotations Only")
+    else:
+        print("🎯 Export & Train Pipeline")
     print("=" * 60)
     
     # Step 1: Export annotations
     data_yaml = export_annotations(
         project_id=args.project,
         export_dir=config.export_dir,
-        image_base_dir=config.image_dir
+        image_base_dir=config.image_dir,
+        filter_cls_ids=args.cls_ids
     )
+    
+    if args.export_project_only:
+        print("\n" + "=" * 60)
+        print("✅ Export completed successfully!")
+        print("=" * 60)
+        print("💡 Next steps:")
+        print(f"   - Dataset ready at: {Path(data_yaml).parent}")
+        print(f"   - Train with: python scripts/3_train_project.py --model yolo11n.pt --project {args.project}")
+        return
     
     # Step 2: Train model
     train_yolo(
@@ -319,16 +456,24 @@ Examples:
         data_yaml=data_yaml,
         epochs=epochs,
         image_size=image_size,
-        output_model_path=output_model
+        output_model_path=output_model,
+        lr0=args.lr0,
+        mosaic=args.mosaic,
+        close_mosaic=args.close_mosaic,
+        batch=args.batch,
+        half=args.half,
+        device=args.device,
+        freeze_ratio=args.freeze_ratio
     )
     
     print("\n" + "=" * 60)
     print("✅ Pipeline completed successfully!")
     print("=" * 60)
-    print(f"💡 Next steps:")
-    print(f"   - Review results in runs/detect/train*/")
+    print("💡 Next steps:")
+    print("   - Review results in runs/detect/train*/")
     print(f"   - Use model: {output_model}")
-    print(f"   - Run predictions: python scripts/6_predict_unlabeled.py")
+    # print(f"   - Run predictions: python scripts/4_predict_unlabeled.py --model runs/detect/train/weights/best.pt --project-id 7")
+    print(f"   - Retrain with new data: python scripts/4_train.py --model {output_model} --project {args.project}")
 
 
 if __name__ == "__main__":
