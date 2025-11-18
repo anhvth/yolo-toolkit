@@ -388,6 +388,7 @@ Examples:
   python scripts/4_train.py --model yolo11n.pt --project 2 --epochs 50
   python scripts/4_train.py --project 2 --export-project-only
   python scripts/4_train.py --model yolo11n.pt --project 2 --cls-ids 0 1 2
+  python scripts/4_train.py --model yolo11n.pt --project 2 --skip-export
         """
     )
     parser.add_argument("--model", help="YOLO model path (e.g., yolo11n.pt)")
@@ -396,6 +397,7 @@ Examples:
     parser.add_argument("--imgsz", type=int, help="Image size (default: from config)")
     parser.add_argument("--output", help="Output model path (default: from config)")
     parser.add_argument("--export-project-only", action="store_true", help="Only export annotations, skip training")
+    parser.add_argument("--skip-export", action="store_true", help="Skip export step, assume dataset already exists from previous run")
     parser.add_argument("--cls-ids", type=int, nargs="+", default=None, help="Filter tasks by class IDs (only include tasks with these classes)")
     
     # Training hyperparameters
@@ -411,6 +413,9 @@ Examples:
     args = parser.parse_args()
     
     # Validate arguments
+    if args.export_project_only and args.skip_export:
+        parser.error("--export-project-only and --skip-export are mutually exclusive")
+    
     if not args.export_project_only and not args.model:
         parser.error("--model is required unless --export-project-only is specified")
     
@@ -429,17 +434,32 @@ Examples:
     print("=" * 60)
     if args.export_project_only:
         print("📦 Export Annotations Only")
+    elif args.skip_export:
+        print("🎯 Train with Existing Dataset")
     else:
         print("🎯 Export & Train Pipeline")
     print("=" * 60)
     
-    # Step 1: Export annotations
-    data_yaml = export_annotations(
-        project_id=args.project,
-        export_dir=config.export_dir,
-        image_base_dir=config.image_dir,
-        filter_cls_ids=args.cls_ids
-    )
+    # Step 1: Export annotations (skip if --skip-export is set)
+    if args.skip_export:
+        # Use existing dataset from previous export
+        export_path = Path(config.export_dir) / "yolo_dataset"
+        data_yaml = str(export_path / "data.yaml")
+        
+        if not Path(data_yaml).exists():
+            print(f"❌ Error: Dataset not found at {data_yaml}")
+            print("💡 Run without --skip-export to create the dataset first")
+            sys.exit(1)
+        
+        print(f"⏭️  Skipping export, using existing dataset: {export_path}")
+        print(f"   📄 Data config: {data_yaml}")
+    else:
+        data_yaml = export_annotations(
+            project_id=args.project,
+            export_dir=config.export_dir,
+            image_base_dir=config.image_dir,
+            filter_cls_ids=args.cls_ids
+        )
     
     if args.export_project_only:
         print("\n" + "=" * 60)
