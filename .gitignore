@@ -76,3 +76,5 @@ project*.json
 # scripts/predict_roi_vehicle.py
 visualize.ipynb
 vlm/
+detect
+runs
