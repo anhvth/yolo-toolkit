@@ -401,7 +401,7 @@ Examples:
     # Training hyperparameters
     parser.add_argument("--lr0", type=float, default=1e-4, help="Initial learning rate (default: 1e-4)")
     parser.add_argument("--mosaic", type=float, default=0.5, help="Mosaic augmentation probability (default: 0.5)")
-    parser.add_argument("--close-mosaic", type=int, default=10, help="Epochs to disable mosaic augmentation before end (default: 10)")
+    parser.add_argument("--close-mosaic", type=int, default=2, help="Epochs to disable mosaic augmentation before end (default: 10)")
     parser.add_argument("--batch", type=int, default=16, help="Batch size (default: 16)")
     parser.add_argument("--half", action="store_true", default=True, help="Use half precision (FP16) training (default: True)")
     parser.add_argument("--no-half", dest="half", action="store_false", help="Disable half precision training")

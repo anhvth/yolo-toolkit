@@ -12,8 +12,8 @@ import ultralytics
 # ============================================================
 DEFAULT_IMG_SIZE = 640
 DEFAULT_ROI_CONF_THRES = 0.25
-DEFAULT_VEH_CONF_THRES = 0.25
-DEFAULT_PLATE_CONF_THRES = 0.1
+DEFAULT_VEH_CONF_THRES = 0.01
+DEFAULT_PLATE_CONF_THRES = 0.01
 
 DEFAULT_ROI_CLASS_NAME = 'ROI'
 DEFAULT_VEHICLE_CLASS_NAMES = ('motobike', 'xedap')
@@ -106,15 +106,20 @@ class SingleYoloPipeline:
         pred = self.model.predict(img, imgsz=self.img_size, verbose=False, conf=0.001)[0]
         return pred
 
-    def postproc(self, results: ultralytics.engine.results.Results, expect_plate: bool):
+    def postproc(
+        self, results: ultralytics.engine.results.Results, expect_plate: bool
+    ) -> tuple[ultralytics.engine.results.Results, bool]:
         """
-        Convert model outputs → filtered YOLO-format predictions.
+        Filter model outputs and return updated Results object.
 
         Args:
             results: ultralytics Results object
             expect_plate: whether to look for plate inside vehicle
 
-        Output: list of [class_id, cx, cy, w, h, score]
+        Returns:
+            tuple: (updated_results, is_weird)
+                - updated_results: Results object with filtered detections
+                - is_weird: True if expect_plate but no plate found inside vehicle
 
         Rules:
           - 1 ROI (best by confidence over roi_conf_thres)
@@ -126,8 +131,8 @@ class SingleYoloPipeline:
         cls = results.boxes.cls.cpu().numpy().astype(int)
         conf = results.boxes.conf.cpu().numpy()
         H, W = results.orig_shape
-        
-        out = []
+
+        selected_indices = []
         is_weird = False
 
         # =========================================================
@@ -140,19 +145,14 @@ class SingleYoloPipeline:
         ]
 
         if not roi_indices:
-            return []  # must have ROI
+            # Return empty results if no ROI found
+            import torch
+            empty_boxes = torch.empty(0, 6).to(results.boxes.data.device)
+            results.boxes.data = empty_boxes
+            return results, is_weird
 
         best_roi_i = max(roi_indices, key=lambda i: conf[i])
-        x1, y1, x2, y2 = xyxy[best_roi_i]
-        roi_conf = float(conf[best_roi_i])
-
-        # normalize
-        roi_cx = (x1 + x2) / 2 / W
-        roi_cy = (y1 + y2) / 2 / H
-        roi_w = (x2 - x1) / W
-        roi_h = (y2 - y1) / H
-
-        out.append([self.roi_cls_id, roi_cx, roi_cy, roi_w, roi_h, roi_conf])
+        selected_indices.append(best_roi_i)
 
         # =========================================================
         # 2) Pick BEST vehicle (motobike/xedap)
@@ -164,20 +164,14 @@ class SingleYoloPipeline:
         ]
 
         if not veh_candidates:
-            # ROI only
-            return out
+            # ROI only - filter results to only include ROI
+            import torch
+            results.boxes.data = results.boxes.data[selected_indices]
+            return results, is_weird
 
         best_veh_i = max(veh_candidates, key=lambda i: conf[i])
+        selected_indices.append(best_veh_i)
         vx1, vy1, vx2, vy2 = xyxy[best_veh_i]
-        veh_cls = int(cls[best_veh_i])
-        veh_conf = float(conf[best_veh_i])
-
-        v_cx = (vx1 + vx2) / 2 / W
-        v_cy = (vy1 + vy2) / 2 / H
-        v_w = (vx2 - vx1) / W
-        v_h = (vy2 - vy1) / H
-
-        out.append([veh_cls, v_cx, v_cy, v_w, v_h, veh_conf])
 
         # =========================================================
         # 3) Plate inside vehicle
@@ -200,19 +194,19 @@ class SingleYoloPipeline:
 
             if plate_indices:
                 best_plate_i = max(plate_indices, key=lambda i: conf[i])
-                px1, py1, px2, py2 = xyxy[best_plate_i]
-                plate_conf = float(conf[best_plate_i])
-
-                p_cx = (px1 + px2) / 2 / W
-                p_cy = (py1 + py2) / 2 / H
-                p_w = (px2 - px1) / W
-                p_h = (py2 - py1) / H
-
-                out.append([self.plate_cls_id, p_cx, p_cy, p_w, p_h, plate_conf])
+                selected_indices.append(best_plate_i)
             else:
                 # this is weird case: expect plate but none found inside vehicle
-                is_weird = True
-        return out, is_weird
+                vehicle_id = self.class_name_to_id['motobike']
+                is_motobike_exists = any(
+                    cls[i] == vehicle_id for i in range(len(cls))
+                )
+                is_weird = True if is_motobike_exists else False
+
+        # Filter results to only include selected detections
+        import torch
+        results.boxes.data = results.boxes.data[selected_indices]
+        return results, is_weird
 
     def __call__(self, img, path=None) -> ultralytics.engine.results.Results:
         """
@@ -228,16 +222,15 @@ class SingleYoloPipeline:
         if path is not None:
             expect_plate = "_left" in str(path)
 
-        # Get filtered predictions in normalized format
-        filtered_preds, is_weird = self.postproc(results, expect_plate=expect_plate)
+        # Get filtered results
+        filtered_results, is_weird = self.postproc(results, expect_plate=expect_plate)
         if is_weird:
-            print(f"⚠️  Weird case detected for image {path}: expect_plate={expect_plate} but no plate found inside vehicle.")
-            
-        
-        # Store filtered predictions as attribute for easy access
-        results.filtered_preds = filtered_preds
-        
-        return results
+            print(
+                f"⚠️  Weird case detected for image {path}: "
+                f"expect_plate={expect_plate} but no plate found inside vehicle."
+            )
+
+        return filtered_results, is_weird
 
 
     def visualize(self, img, preds, thickness: int = 3):

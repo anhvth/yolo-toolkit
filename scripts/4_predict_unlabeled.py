@@ -12,6 +12,7 @@ import cv2
 from pathlib import Path
 from typing import List, Dict, Any
 from urllib.parse import unquote
+from numpy import isin
 from ultralytics import YOLO
 from label_studio_sdk import LabelStudio
 from label_studio_sdk_wrapper.config import get_config
@@ -148,7 +149,7 @@ def predict_unlabeled(
     conf_threshold=None,
     upload=True,
     max_boxes=None,
-    batch_size=10,
+    batch_size=32,
     pipeline_name=None
 ):
     """
@@ -160,7 +161,7 @@ def predict_unlabeled(
         conf_threshold: Confidence threshold for predictions
         upload: Whether to upload predictions to Label Studio
         max_boxes: Maximum number of boxes per image (highest confidence), None = unlimited
-        batch_size: Number of concurrent uploads (default: 10)
+        batch_size: Number of tasks to process in each batch (default: 32)
         pipeline_name: Name of custom pipeline (e.g., 'yolo_plate'), None for standard YOLO
     """
     
@@ -232,59 +233,67 @@ def predict_unlabeled(
             print(f"📦 Max boxes per image: {max_boxes}")
         
         # Process predictions and prepare upload data
-        print(f"\n🚀 Running predictions on {len(unlabeled_tasks)} unlabeled tasks...")
-        print(f"📦 Batch size: {batch_size} concurrent uploads")
-        
-        predictions_to_upload = []
-        failed_predictions = 0
-        
-        from tqdm import tqdm
-        
-
-        predictions_to_upload = []
-        failed_predictions = 0
+        print("\n🚀 Running predictions and uploads in batches...")
+        print(f"📦 Batch size: {batch_size} tasks per batch")
         
         from tqdm import tqdm as tqdm_sync
         
-        for task in tqdm_sync(unlabeled_tasks, desc="Predicting"):
-            try:
-                task_id = task.id if hasattr(task, "id") else task["id"]
+        successful_uploads = 0
+        failed_predictions = 0
+        failed_uploads = 0
+        
+        # Process tasks in batches
+        for batch_start in range(0, len(unlabeled_tasks), batch_size):
+            batch_end = min(batch_start + batch_size, len(unlabeled_tasks))
+            batch_tasks = unlabeled_tasks[batch_start:batch_end]
+            
+            batch_num = batch_start // batch_size + 1
+            total_batches = (len(unlabeled_tasks) + batch_size - 1) // batch_size
+            print(f"\n📦 Processing batch {batch_num}/{total_batches} ({len(batch_tasks)} tasks)...")
+            
+            # Phase 1: Generate predictions for this batch
+            predictions_to_upload = []
+            
+            for task in tqdm_sync(batch_tasks, desc=f"Batch {batch_num} - Predicting"):
+                try:
+                    task_id = task.id if hasattr(task, "id") else task["id"]
 
-                # Extract image path
-                img_url = task.data.get("image", "")
-                if "/data/local-files/?d=" in img_url:
-                    img_path = img_url.replace("/data/local-files/?d=", "")
-                    # URL decode to handle special characters like Đ (%C4%90)
-                    img_path = unquote(img_path)
-                else:
-                    tqdm_sync.write(f"⚠️ unknown image format: {img_url}")
-                    failed_predictions += 1
-                    continue
+                    # Extract image path
+                    img_url = task.data.get("image", "")
+                    if "/data/local-files/?d=" in img_url:
+                        img_path = img_url.replace("/data/local-files/?d=", "")
+                        # URL decode to handle special characters like Đ (%C4%90)
+                        img_path = unquote(img_path)
+                    else:
+                        tqdm_sync.write(f"⚠️ unknown image format: {img_url}")
+                        failed_predictions += 1
+                        continue
 
-                img_path = Path(img_path)
-                if not img_path.exists():
-                    tqdm_sync.write(f"⚠️ not found: {img_path}")
-                    failed_predictions += 1
-                    continue
+                    img_path = Path(img_path)
+                    if not img_path.exists():
+                        tqdm_sync.write(f"⚠️ not found: {img_path}")
+                        failed_predictions += 1
+                        continue
 
-                # Load image
-                img = cv2.imread(str(img_path))
-                if img is None:
-                    tqdm_sync.write(f"⚠️ failed to read: {img_path}")
-                    failed_predictions += 1
-                    continue
+                    # Load image
+                    img = cv2.imread(str(img_path))
+                    if img is None:
+                        tqdm_sync.write(f"⚠️ failed to read: {img_path}")
+                        failed_predictions += 1
+                        continue
 
-                H, W = img.shape[:2]
+                    H, W = img.shape[:2]
 
-                # Run model - returns Results object for both standard and custom pipelines
-                results = model(img[..., ::-1], path=img_path)
+                    # Run model - returns Results object for both standard and custom pipelines
+                    is_weird = False
+                    results = model(img[..., ::-1], path=img_path)
+                    if isinstance(results, tuple):
+                        results, is_weird = results  # Unpack for custom pipeline
+                        
 
-                # Get predictions in normalized format
-                if use_custom_pipeline:
-                    # Custom pipeline stores filtered predictions in results.filtered_preds
-                    preds = results.filtered_preds if hasattr(results, 'filtered_preds') else []
-                else:
-                    # Standard YOLO - extract from boxes
+                    # Get predictions in normalized format
+                    # Both custom pipeline and standard YOLO return Results objects
+                    # Extract boxes from the Results object
                     boxes = results.boxes
                     preds = []
                     for j in range(len(boxes)):
@@ -298,112 +307,115 @@ def predict_unlabeled(
                         bh = (y2 - y1) / H
                         preds.append([cls_id, cx, cy, bw, bh, conf])
 
-                if not preds:
-                    continue
+                    if not preds:
+                        continue
 
-                # Convert to Label Studio format
-                ls_results = []
-                for i, (cls, cx, cy, bw, bh, score) in enumerate(preds):
-                    x = (cx - bw/2) * 100
-                    y = (cy - bh/2) * 100
-                    w = bw * 100
-                    h = bh * 100
+                    # Convert to Label Studio format
+                    ls_results = []
+                    for i, (cls, cx, cy, bw, bh, score) in enumerate(preds):
+                        x = (cx - bw/2) * 100
+                        y = (cy - bh/2) * 100
+                        w = bw * 100
+                        h = bh * 100
 
-                    # Clamp bounds
-                    x = max(0, min(100, x))
-                    y = max(0, min(100, y))
-                    w = max(0, min(100 - x, w))
-                    h = max(0, min(100 - y, h))
+                        # Clamp bounds
+                        x = max(0, min(100, x))
+                        y = max(0, min(100, y))
+                        w = max(0, min(100 - x, w))
+                        h = max(0, min(100 - y, h))
 
-                    cls_name = class_names.get(int(cls), str(cls))
-                    ls_results.append({
-                        "type": "rectanglelabels",
-                        "value": {
-                            "x": x,
-                            "y": y,
-                            "width": w,
-                            "height": h,
-                            "rotation": 0,
-                            "rectanglelabels": [cls_name],
-                        },
-                        "to_name": "image",
-                        "from_name": "label",
-                        "image_rotation": 0,
-                        "original_width": W,
-                        "original_height": H,
-                        "id": f"pred-{i}"
+                        cls_name = class_names.get(int(cls), str(cls))
+                        ls_results.append({
+                            "type": "rectanglelabels",
+                            "value": {
+                                "x": x,
+                                "y": y,
+                                "width": w,
+                                "height": h,
+                                "rotation": 0,
+                                "rectanglelabels": [cls_name],
+                            },
+                            "to_name": "image",
+                            "from_name": "label",
+                            "image_rotation": 0,
+                            "original_width": W,
+                            "original_height": H,
+                            "id": f"pred-{i}"
+                        })
+
+                    if not ls_results:
+                        continue
+
+                    # Calculate average score
+                    avg_score = sum(p[5] for p in preds) / len(preds)
+
+                    # Store prediction data for upload
+                    if is_weird:
+                        url = f"http://localhost:8080/projects/{project_id}/data?tab=1&task={task_id}"
+                        tqdm_sync.write(
+                            f"⚠️  Weird case for task {task_id} ({img_path.name}): "
+                            f"expect_plate=True but no plate found inside vehicle. "
+                            f"URL: {url}"
+                        )
+                    predictions_to_upload.append({
+                        "task_id": task_id,
+                        "result": ls_results,
+                        "score": float(avg_score) if not is_weird else 0.0,
+                        "model_version": "custom-yolo",
+                        "img_name": img_path.name
                     })
 
-                if not ls_results:
-                    continue
+                except Exception as e:
+                    tqdm_sync.write(f"✗ Prediction error: {e}")
+                    failed_predictions += 1
 
-                # Calculate average score
-                avg_score = sum(p[5] for p in preds) / len(preds)
+            # Phase 2: Upload predictions for this batch asynchronously
+            print(f"✅ Generated {len(predictions_to_upload)} predictions for batch {batch_num}")
+            
+            if not upload:
+                print("⏭️  Skipping upload (--no-upload flag set)")
+            elif not predictions_to_upload:
+                print(f"⚠️  No predictions to upload for batch {batch_num}")
+            else:
+                print(f"📤 Uploading {len(predictions_to_upload)} predictions from batch {batch_num}...")
 
-                # Store prediction data for upload
-                predictions_to_upload.append({
-                    "task_id": task_id,
-                    "result": ls_results,
-                    "score": float(avg_score),
-                    "model_version": "custom-yolo",
-                    "img_name": img_path.name
-                })
+                async def upload_batch_async():
+                    nonlocal successful_uploads, failed_uploads
+                    semaphore = asyncio.Semaphore(10)  # Concurrent uploads within batch
 
-            except Exception as e:
-                tqdm_sync.write(f"✗ Prediction error: {e}")
-                failed_predictions += 1
+                    async def upload_with_semaphore(pred_info):
+                        async with semaphore:
+                            try:
+                                await asyncio.to_thread(
+                                    client.predictions.create,
+                                    task=pred_info["task_id"],
+                                    result=pred_info["result"],
+                                    score=pred_info["score"],
+                                    model_version=pred_info["model_version"]
+                                )
+                                return True, pred_info["task_id"], pred_info["img_name"]
+                            except Exception as e:
+                                return False, pred_info["task_id"], str(e)
 
-        print(f"\n✅ Generated {len(predictions_to_upload)} predictions")
-        if failed_predictions > 0:
-            print(f"⚠️  Failed: {failed_predictions}")
+                    tasks = [
+                        upload_with_semaphore(pred_info)
+                        for pred_info in predictions_to_upload
+                    ]
 
-        # Phase 2: Upload predictions asynchronously
-        successful_uploads = 0
-        failed_uploads = 0
+                    for completed in async_tqdm(
+                        asyncio.as_completed(tasks),
+                        total=len(tasks),
+                        desc=f"Batch {batch_num} - Uploading",
+                        unit="pred"
+                    ):
+                        success, task_id, info = await completed
+                        if success:
+                            successful_uploads += 1
+                        else:
+                            failed_uploads += 1
+                            print(f"\n✗ Upload error (task {task_id}): {info}")
 
-        if predictions_to_upload:
-            print(f"\n📤 Uploading {len(predictions_to_upload)} predictions...")
-
-            async def upload_batch():
-                nonlocal successful_uploads, failed_uploads
-                semaphore = asyncio.Semaphore(batch_size)
-
-                async def upload_with_semaphore(pred_info):
-                    async with semaphore:
-                        try:
-                            
-                            await asyncio.to_thread(
-                                client.predictions.create,
-                                task=pred_info["task_id"],
-                                result=pred_info["result"],
-                                score=pred_info["score"],
-                                model_version=pred_info["model_version"]
-                            )
-                            url = f'http://localhost:8080/projects/{project_id}/data?tab=1&task={pred_info["task_id"]}'
-                            print(f"✓ Uploaded prediction for task {pred_info['task_id']}: {url}")
-                            return True, pred_info["task_id"], pred_info["img_name"]
-                        except Exception as e:
-                            return False, pred_info["task_id"], str(e)
-
-                tasks = [
-                    upload_with_semaphore(pred_info)
-                    for pred_info in predictions_to_upload
-                ]
-
-                for completed in async_tqdm(
-                    asyncio.as_completed(tasks),
-                    total=len(tasks),
-                    desc="Uploading",
-                    unit="pred"
-                ):
-                    success, task_id, info = await completed
-                    if success:
-                        successful_uploads += 1
-                    else:
-                        failed_uploads += 1
-                        print(f"\n✗ Upload error (task {task_id}): {info}")
-
-            asyncio.run(upload_batch())
+                asyncio.run(upload_batch_async())
         # Summary
         print(f"\n{'='*60}")
         print("📊 PREDICTION SUMMARY")
@@ -453,8 +465,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--batch-size", 
         type=int, 
-        default=10,
-        help="Number of concurrent uploads (default: 10)"
+        default=32,
+        help="Number of tasks to process in each batch (default: 32)"
     )
     parser.add_argument(
         "--pipeline",
