@@ -19,8 +19,8 @@ from label_studio_sdk_wrapper.config import get_config
 from label_studio_sdk_wrapper.inference_roi_moto_plate import REGISTERED_PIPELINES
 from tqdm.asyncio import tqdm as async_tqdm
 
-DEBUG_TASKS = None
-
+# DEBUG_TASKS = [123]
+DEBUG_TASKS = []
 def is_submitted(task):
     """Return True if the task has manual annotation (submitted by user)."""
     return bool(task.is_labeled or getattr(task, "annotations", []))
