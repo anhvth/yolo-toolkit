@@ -1,6 +1,7 @@
 # Environment variables
 .env
 ls_settings.json
+ls_settings.yaml
 
 # Python-generated files
 __pycache__/

@@ -203,7 +203,7 @@ def predict_and_save_labels(
         skipped = 0
         total_batches = (len(split_images) + batch - 1) // batch
 
-        for batch_idx in range(0, len(split_images), batch):
+        for batch_idx in tqdm(range(0, len(split_images), batch)):
             batch_paths = split_images[batch_idx : batch_idx + batch]
             batch_num = batch_idx // batch + 1
             batch_results = _predict_batch(

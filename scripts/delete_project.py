@@ -15,7 +15,7 @@ def delete_project(project_id=None, project_title=None, confirm=True):
     config = get_config()
     
     if not config.ls_api_key:
-        print("❌ Error: LABEL_STUDIO_API_KEY not found in ls_settings.json")
+        print("❌ Error: LABEL_STUDIO_API_KEY not found in ls_settings.yaml")
         sys.exit(1)
     
     if not project_id and not project_title:

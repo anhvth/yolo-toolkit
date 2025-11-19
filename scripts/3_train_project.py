@@ -179,12 +179,12 @@ def export_annotations(project_id, export_dir, image_base_dir, filter_cls_ids=No
         print(str(e))
         sys.exit(1)
     except json.JSONDecodeError:
-        print("❌ Error: Invalid JSON in ls_settings.json")
+        print("❌ Error: Invalid YAML in ls_settings.yaml")
         print("💡 Check the JSON syntax in your settings file")
         sys.exit(1)
     
     if not config.ls_api_key:
-        print("❌ Error: LABEL_STUDIO_API_KEY not set in ls_settings.json")
+        print("❌ Error: LABEL_STUDIO_API_KEY not set in ls_settings.yaml")
         print("💡 Get your API key from Label Studio UI → Account & Settings → Access Token")
         sys.exit(1)
     

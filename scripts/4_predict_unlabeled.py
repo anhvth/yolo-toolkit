@@ -176,7 +176,7 @@ def predict_unlabeled(
         print("❌ Error: PROJECT_ID not set")
         print("\n📋 Steps to fix:")
         print("   1. Run script 2 to create a project")
-        print("   2. The project ID will be saved to ls_settings.json")
+        print("   2. The project ID will be saved to ls_settings.yaml")
         sys.exit(1)
     
     model_file = Path(model_path)
@@ -439,7 +439,7 @@ def predict_unlabeled(
             print("\n📋 To fix:")
             print("   1. Go to Label Studio → Account & Settings → Access Token")
             print("   2. Generate a new API token")
-            print("   3. Update LABEL_STUDIO_API_KEY in ls_settings.json")
+            print("   3. Update LABEL_STUDIO_API_KEY in ls_settings.yaml")
         elif "Connection" in error_msg or "refused" in error_msg:
             print(f"\n🔌 Connection failed - Label Studio is not running at {config.ls_url}")
             print("\n📋 To start Label Studio:")

@@ -15,7 +15,7 @@ from label_studio_sdk_wrapper.config_label import build_label_config
 
 def prompt_for_api_key(config):
     """Prompt user for API key and save it to settings"""
-    print("❌ API key is missing, invalid, or expired in ls_settings.json")
+    print("❌ API key is missing, invalid, or expired in ls_settings.yaml")
     print("\n📋 To get your API key:")
     print("   1. Open Label Studio: http://localhost:8080/user/account/personal-access-token")
     print("   2. Sign up or log in (create account if first time)")
@@ -101,7 +101,7 @@ def create_project(config, client):
         print(f"✅ Project created successfully!")
         print(f"   Project ID: {project.id}")
         print(f"   Project URL: {config.ls_url}/projects/{project.id}")
-        print(f"\n💡 Updating project_id in ls_settings.json...")
+        print(f"\n💡 Updating project_id in ls_settings.yaml...")
         
         # Update the settings file with new project ID
         config.update_project_id(project.id)

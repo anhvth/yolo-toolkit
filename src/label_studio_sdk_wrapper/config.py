@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
 Configuration loader for Label Studio + YOLO toolkit
-Loads settings from ls_settings.json instead of .env files
+Loads settings from ls_settings.yaml instead of .env files
 """
 
-import json
+import yaml
 import os
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -15,27 +15,27 @@ class Config:
     
     def __init__(self, config_path: Optional[str] = None):
         """
-        Load configuration from ls_settings.json
+        Load configuration from ls_settings.yaml
         
         Args:
-            config_path: Path to settings JSON file (default: ls_settings.json in project root)
+            config_path: Path to settings YAML file (default: ls_settings.yaml in project root)
         """
         if config_path is None:
             # Find project root (go up from scripts/ to project root)
             script_dir = Path(__file__).parent
             project_root = script_dir.parent
-            config_path = str(project_root / "ls_settings.json")
+            config_path = str(project_root / "ls_settings.yaml")
         
         self.config_path = Path(config_path)
         
         if not self.config_path.exists():
             raise FileNotFoundError(
                 f"❌ Configuration file not found: {self.config_path}\n"
-                f"💡 Copy ls_settings.json.example to ls_settings.json and update with your settings"
+                f"💡 Copy ls_settings.yaml.example to ls_settings.yaml and update with your settings"
             )
         
         with open(self.config_path, 'r') as f:
-            self._config = json.load(f)
+            self._config = yaml.safe_load(f)
     
     # Label Studio settings
     @property
@@ -132,7 +132,7 @@ class Config:
         """
         self._config["label_studio"]["project_id"] = project_id
         with open(self.config_path, 'w') as f:
-            json.dump(self._config, f, indent=2)
+            yaml.dump(self._config, f, sort_keys=False, indent=2)
         print(f"✅ Updated PROJECT_ID={project_id} in {self.config_path}")
     
     def update_api_key(self, api_key: str):
@@ -144,7 +144,7 @@ class Config:
         """
         self._config["label_studio"]["api_key"] = api_key
         with open(self.config_path, 'w') as f:
-            json.dump(self._config, f, indent=2)
+            yaml.dump(self._config, f, sort_keys=False, indent=2)
         print(f"✅ Updated API key in {self.config_path}")
     
     def get_raw(self) -> Dict[str, Any]:
@@ -169,6 +169,6 @@ def get_config(config_path: Optional[str] = None) -> Config:
         if config_path is None:
             # Find project root (go up from scripts/ to project root)
             project_dir = Path(__file__).parents[2]
-            config_path = str(project_dir / "ls_settings.json")
+            config_path = str(project_dir / "ls_settings.yaml")
         _config = Config(config_path)
     return _config

@@ -178,12 +178,12 @@ Examples:
     config = get_config()
     
     if not config.ls_api_key:
-        print("❌ Error: LABEL_STUDIO_API_KEY not found in ls_settings.json")
+        print("❌ Error: LABEL_STUDIO_API_KEY not found in ls_settings.yaml")
         print("\n📋 Steps to fix:")
         print("   1. Open Label Studio: http://localhost:8080")
         print("   2. Go to Account & Settings → Access Token")
         print("   3. Copy your API key")
-        print("   4. Update ls_api_key in ls_settings.json")
+        print("   4. Update ls_api_key in ls_settings.yaml")
         sys.exit(1)
     
     print(f"🔗 Connecting to Label Studio at {config.ls_url}...")
@@ -213,7 +213,7 @@ Examples:
             print("   1. Open: http://localhost:8080/user/account")
             print("   2. Go to 'Access Token' tab")
             print("   3. Click 'Reset Token' if needed")
-            print("   4. Update ls_api_key in ls_settings.json")
+            print("   4. Update ls_api_key in ls_settings.yaml")
         
         sys.exit(1)
 
