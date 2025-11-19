@@ -3,6 +3,7 @@
 Script 3b: Train - Train YOLO model with exported dataset
 Usage: python scripts/3_b_train.py --model yolo11n.pt --data data/exports/yolo_dataset/data.yaml
        python scripts/3_b_train.py --model yolo11n.pt --data data/exports/yolo_dataset/data.yaml --epochs 100
+       python scripts/3_b_train.py --model yolo11n.pt --data data/exports/yolo_dataset/data.yaml --no-augment
 """
 
 import argparse
@@ -13,7 +14,8 @@ from label_studio_sdk_wrapper.config import get_config
 
 
 def train_yolo(model_path, data_yaml, epochs, image_size, output_model_path, 
-               lr0=1e-4, mosaic=0.5, batch=4, half=True, device=None, freeze_ratio=0.95, close_mosaic=10):
+               lr0=1e-4, mosaic=0.5, batch=16, half=True, device=None, freeze_ratio=0.95, close_mosaic=10,
+               mixup=0.0, copy_paste=0.0, hsv_h=0.0, hsv_s=0.0, hsv_v=0.0, fliplr=0.0, flipud=0.0, erasing=0.0, augment=False, **kwargs):
     """Train YOLO model with configurable parameters"""
     try:
         from ultralytics import YOLO
@@ -44,6 +46,16 @@ def train_yolo(model_path, data_yaml, epochs, image_size, output_model_path,
     print(f"   Half Precision: {half}")
     print(f"   Device: {device}")
     print(f"   Freeze Ratio: {freeze_ratio}")
+    print(f"   Augment: {augment}")
+    if not augment:
+        print(f"   Mixup: {mixup}")
+        print(f"   Copy Paste: {copy_paste}")
+        print(f"   HSV H: {hsv_h}")
+        print(f"   HSV S: {hsv_s}")
+        print(f"   HSV V: {hsv_v}")
+        print(f"   Flip LR: {fliplr}")
+        print(f"   Flip UD: {flipud}")
+        print(f"   Erasing: {erasing}")
     
     try:
         model = YOLO(model_path)
@@ -78,7 +90,16 @@ def train_yolo(model_path, data_yaml, epochs, image_size, output_model_path,
             close_mosaic=close_mosaic,
             batch=batch,
             half=half,
-            device=device
+            device=device,
+            augment=augment,
+            mixup=mixup,
+            copy_paste=copy_paste,
+            hsv_h=hsv_h,
+            hsv_s=hsv_s,
+            hsv_v=hsv_v,
+            fliplr=fliplr,
+            flipud=flipud,
+            erasing=erasing
         )
         
         print("\n✅ Training completed successfully!")
@@ -117,11 +138,12 @@ Examples:
   python scripts/3_b_train.py --model yolo11n.pt --data data/exports/yolo_dataset/data.yaml
   python scripts/3_b_train.py --model yolo11n.pt --data data/exports/yolo_dataset/data.yaml --epochs 100
   python scripts/3_b_train.py --model yolo11n.pt --data data/exports/yolo_dataset/data.yaml --freeze-ratio 0.8
+  python scripts/3_b_train.py --model yolo11n.pt --data data/exports/yolo_dataset/data.yaml --no-augment
         """
     )
     parser.add_argument("--model", required=True, help="YOLO model path (e.g., yolo11n.pt)")
     parser.add_argument("--data", required=True, help="Path to data.yaml file")
-    parser.add_argument("--epochs", type=int, help="Training epochs (default: from config)")
+    parser.add_argument("--epochs", "--epoch", type=int, help="Training epochs (default: from config)")
     parser.add_argument("--imgsz", type=int, help="Image size (default: from config)")
     parser.add_argument("--output", help="Output model path (default: from config)")
     
@@ -134,6 +156,8 @@ Examples:
     parser.add_argument("--no-half", dest="half", action="store_false", help="Disable half precision training")
     parser.add_argument("--device", type=str, default=None, help="Device to use (cuda/mps/cpu, default: auto-detect)")
     parser.add_argument("--freeze-ratio", type=float, default=0.5, help="Ratio of parameters to freeze (0-1, default: 0.5)")
+    parser.add_argument("--augment", action="store_true", default=False, help="Use data augmentation during training (default: False)")
+    parser.add_argument("--no-augment", action="store_true", help="Disable all augmentations")
     
     args = parser.parse_args()
     
@@ -149,6 +173,30 @@ Examples:
     image_size = args.imgsz or config.image_size
     output_model = args.output or config.updated_model_path
     
+    # Set augmentation parameters
+    if args.no_augment:
+        augment = False
+        mosaic = 0
+        mixup = 0
+        copy_paste = 0
+        hsv_h = 0
+        hsv_s = 0
+        hsv_v = 0
+        fliplr = 0
+        flipud = 0
+        erasing = 0
+    else:
+        augment = args.augment
+        mosaic = args.mosaic
+        mixup = 0.0
+        copy_paste = 0.0
+        hsv_h = 0.0
+        hsv_s = 0.0
+        hsv_v = 0.0
+        fliplr = 0.0
+        flipud = 0.0
+        erasing = 0.0
+    
     print("=" * 60)
     print("🎯 Train YOLO Model")
     print("=" * 60)
@@ -160,12 +208,21 @@ Examples:
         image_size=image_size,
         output_model_path=output_model,
         lr0=args.lr0,
-        mosaic=args.mosaic,
+        mosaic=mosaic,
         close_mosaic=args.close_mosaic,
         batch=args.batch,
         half=args.half,
         device=args.device,
-        freeze_ratio=args.freeze_ratio
+        freeze_ratio=args.freeze_ratio,
+        mixup=mixup,
+        copy_paste=copy_paste,
+        hsv_h=hsv_h,
+        hsv_s=hsv_s,
+        hsv_v=hsv_v,
+        fliplr=fliplr,
+        flipud=flipud,
+        erasing=erasing,
+        augment=augment
     )
     
     print("\n" + "=" * 60)
