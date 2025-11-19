@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Script 4: Export & Train - Export annotations from Label Studio and train YOLO model
-Combines export and training into a single workflow.
-Usage: python scripts/4_train.py --model yolo11n.pt --project 2
+Script 3a: Export - Export annotations from Label Studio to YOLO format
+Usage: python scripts/3_a_export.py --project 2
+       python scripts/3_a_export.py --project 2 --cls-ids 0 1 2
 """
 
 import argparse
@@ -12,7 +12,6 @@ import sys
 import time
 from pathlib import Path
 from label_studio_sdk import LabelStudio
-import torch
 from label_studio_sdk_wrapper.config import get_config
 
 
@@ -283,141 +282,23 @@ def export_annotations(project_id, export_dir, image_base_dir, filter_cls_ids=No
         sys.exit(1)
 
 
-def train_yolo(model_path, data_yaml, epochs, image_size, output_model_path, 
-               lr0=1e-4, mosaic=0.5, batch=4, half=True, device=None, freeze_ratio=0.95, close_mosaic=10):
-    """Train YOLO model with configurable parameters"""
-    try:
-        from ultralytics import YOLO
-    except ImportError:
-        print("❌ Error: ultralytics package not installed")
-        print("💡 Install it with: pip install ultralytics")
-        sys.exit(1)
-    
-    data_path = Path(data_yaml)
-    if not data_path.exists():
-        print(f"❌ Error: {data_yaml} not found!")
-        sys.exit(1)
-    
-    # Auto-detect device if not specified
-    if device is None:
-        device = 'mps' if torch.backends.mps.is_available() else 'cuda'
-    
-    print(f"\n🚀 Starting YOLO training...")
-    print(f"   Model: {model_path}")
-    print(f"   Data: {data_yaml}")
-    print(f"   Epochs: {epochs}")
-    print(f"   Image Size: {image_size}")
-    print(f"   Learning Rate: {lr0}")
-    print(f"   Mosaic: {mosaic}")
-    print(f"   Close Mosaic: {close_mosaic}")
-    print(f"   Batch Size: {batch}")
-    print(f"   Half Precision: {half}")
-    print(f"   Device: {device}")
-    print(f"   Freeze Ratio: {freeze_ratio}")
-    
-    try:
-        model = YOLO(model_path)
-        def frozen_model(model, ratio: float):
-            """
-            Freeze ratio (0~1) of parameters.
-            Example: ratio=0.8 -> freeze first 80% of params.
-            """
-            params = list(model.model.named_parameters())
-            total = len(params)
-            k = int(total * ratio)
-
-            for i, (name, p) in enumerate(params):
-                p.requires_grad = (i >= k)
-
-            print(f"Frozen {k}/{total} params ({ratio*100:.1f}%)")
-            return model
-        
-        # Apply model freezing if freeze_ratio > 0
-        if freeze_ratio > 0:
-            model = frozen_model(model, freeze_ratio)
-        
-        results = model.train(
-            data=str(data_path),
-            epochs=epochs,
-            imgsz=image_size,
-            project="runs/detect",
-            name="train",
-            exist_ok=True,
-            lr0=lr0,
-            mosaic=mosaic,
-            close_mosaic=close_mosaic,
-            batch=batch,
-            half=half,
-            device=device
-        )
-        
-        print("\n✅ Training completed successfully!")
-        
-        # Find the latest training run
-        runs_dir = Path("runs/detect")
-        train_dirs = sorted(runs_dir.glob("train*"), key=lambda x: x.stat().st_mtime)
-        if train_dirs:
-            latest_run = train_dirs[-1]
-            best_model = latest_run / "weights" / "best.pt"
-            
-            if best_model.exists():
-                # Copy to output path
-                output_path = Path(output_model_path)
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                import shutil
-                shutil.copy(best_model, output_path)
-                print(f"📋 Best model saved to: {output_path}")
-                print(f"📁 Training results: {latest_run}")
-            
-        return True
-        
-    except Exception as e:
-        print(f"❌ Training failed: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
-
-
 def main():
     parser = argparse.ArgumentParser(
-        description="Export Label Studio annotations and train YOLO model",
+        description="Export Label Studio annotations to YOLO format",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python scripts/4_train.py --model yolo11n.pt --project 2
-  python scripts/4_train.py --model yolo11n.pt --project 2 --epochs 50
-  python scripts/4_train.py --project 2 --export-project-only
-  python scripts/4_train.py --model yolo11n.pt --project 2 --cls-ids 0 1 2
-  python scripts/4_train.py --model yolo11n.pt --project 2 --skip-export
+  python scripts/3_a_export.py --project 2
+  python scripts/3_a_export.py --project 2 --cls-ids 0 1 2
+  python scripts/3_a_export.py --project 2 --export-dir data/custom_export
         """
     )
-    parser.add_argument("--model", help="YOLO model path (e.g., yolo11n.pt)")
     parser.add_argument("--project", type=int, required=True, help="Label Studio project ID")
-    parser.add_argument("--epochs", type=int, help="Training epochs (default: from config)")
-    parser.add_argument("--imgsz", type=int, help="Image size (default: from config)")
-    parser.add_argument("--output", help="Output model path (default: from config)")
-    parser.add_argument("--export-project-only", action="store_true", help="Only export annotations, skip training")
-    parser.add_argument("--skip-export", action="store_true", help="Skip export step, assume dataset already exists from previous run")
     parser.add_argument("--cls-ids", type=int, nargs="+", default=None, help="Filter tasks by class IDs (only include tasks with these classes)")
-    
-    # Training hyperparameters
-    parser.add_argument("--lr0", type=float, default=1e-4, help="Initial learning rate (default: 1e-4)")
-    parser.add_argument("--mosaic", type=float, default=0.5, help="Mosaic augmentation probability (default: 0.5)")
-    parser.add_argument("--close-mosaic", type=int, default=10, help="Epochs to disable mosaic augmentation before end (default: 10)")
-    parser.add_argument("--batch", type=int, default=16, help="Batch size (default: 16)")
-    parser.add_argument("--half", action="store_true", default=True, help="Use half precision (FP16) training (default: True)")
-    parser.add_argument("--no-half", dest="half", action="store_false", help="Disable half precision training")
-    parser.add_argument("--device", type=str, default=None, help="Device to use (cuda/mps/cpu, default: auto-detect)")
-    parser.add_argument("--freeze-ratio", type=float, default=0.5, help="Ratio of parameters to freeze (0-1, default: 0.5)")
+    parser.add_argument("--export-dir", help="Export directory (default: from config)")
+    parser.add_argument("--image-dir", help="Image directory (default: from config)")
     
     args = parser.parse_args()
-    
-    # Validate arguments
-    if args.export_project_only and args.skip_export:
-        parser.error("--export-project-only and --skip-export are mutually exclusive")
-    
-    if not args.export_project_only and not args.model:
-        parser.error("--model is required unless --export-project-only is specified")
     
     # Load config
     try:
@@ -426,74 +307,26 @@ Examples:
         print(f"❌ Error loading configuration: {e}")
         sys.exit(1)
     
-    # Use config defaults if not specified
-    epochs = args.epochs or config.epochs
-    image_size = args.imgsz or config.image_size
-    output_model = args.output or config.updated_model_path
+    export_dir = args.export_dir or config.export_dir
+    image_dir = args.image_dir or config.image_dir
     
     print("=" * 60)
-    if args.export_project_only:
-        print("📦 Export Annotations Only")
-    elif args.skip_export:
-        print("🎯 Train with Existing Dataset")
-    else:
-        print("🎯 Export & Train Pipeline")
+    print("📦 Export Annotations to YOLO Format")
     print("=" * 60)
     
-    # Step 1: Export annotations (skip if --skip-export is set)
-    if args.skip_export:
-        # Use existing dataset from previous export
-        export_path = Path(config.export_dir) / "yolo_dataset"
-        data_yaml = str(export_path / "data.yaml")
-        
-        if not Path(data_yaml).exists():
-            print(f"❌ Error: Dataset not found at {data_yaml}")
-            print("💡 Run without --skip-export to create the dataset first")
-            sys.exit(1)
-        
-        print(f"⏭️  Skipping export, using existing dataset: {export_path}")
-        print(f"   📄 Data config: {data_yaml}")
-    else:
-        data_yaml = export_annotations(
-            project_id=args.project,
-            export_dir=config.export_dir,
-            image_base_dir=config.image_dir,
-            filter_cls_ids=args.cls_ids
-        )
-    
-    if args.export_project_only:
-        print("\n" + "=" * 60)
-        print("✅ Export completed successfully!")
-        print("=" * 60)
-        print("💡 Next steps:")
-        print(f"   - Dataset ready at: {Path(data_yaml).parent}")
-        print(f"   - Train with: python scripts/3_train_project.py --model yolo11n.pt --project {args.project}")
-        return
-    
-    # Step 2: Train model
-    train_yolo(
-        model_path=args.model,
-        data_yaml=data_yaml,
-        epochs=epochs,
-        image_size=image_size,
-        output_model_path=output_model,
-        lr0=args.lr0,
-        mosaic=args.mosaic,
-        close_mosaic=args.close_mosaic,
-        batch=args.batch,
-        half=args.half,
-        device=args.device,
-        freeze_ratio=args.freeze_ratio
+    data_yaml = export_annotations(
+        project_id=args.project,
+        export_dir=export_dir,
+        image_base_dir=image_dir,
+        filter_cls_ids=args.cls_ids
     )
     
     print("\n" + "=" * 60)
-    print("✅ Pipeline completed successfully!")
+    print("✅ Export completed successfully!")
     print("=" * 60)
     print("💡 Next steps:")
-    print("   - Review results in runs/detect/train*/")
-    print(f"   - Use model: {output_model}")
-    # print(f"   - Run predictions: python scripts/4_predict_unlabeled.py --model runs/detect/train/weights/best.pt --project-id 7")
-    print(f"   - Retrain with new data: python scripts/4_train.py --model {output_model} --project {args.project}")
+    print(f"   - Dataset ready at: {Path(data_yaml).parent}")
+    print(f"   - Train with: python scripts/3_b_train.py --model yolo11n.pt --data {data_yaml}")
 
 
 if __name__ == "__main__":
