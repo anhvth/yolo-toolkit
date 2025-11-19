@@ -1,8 +1,8 @@
 {
   "label_studio": {
     "url": "http://localhost:8080",
-    "api_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6ODA2OTYwNTE3MSwiaWF0IjoxNzYyNDA1MTcxLCJqdGkiOiIxNGEzNTJjMDg3OGM0YTM4OWU4MTNiOGRlOTNlN2JlZSIsInVzZXJfaWQiOiIxIn0.HDK7REkhNl3KD447z7SUuQCW8G7o-CU34i4nb-Vr4S0",
-    "project_id": 8,
+    "api_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6ODA3MDY0NDIxMiwiaWF0IjoxNzYzNDQ0MjEyLCJqdGkiOiJjMjliM2M1Y2ZhMzI0OWJkYWE0NTM0NTk3NzQzZDhjMyIsInVzZXJfaWQiOiIxIn0.gAgotYjbGhxpcNorSvA9tThwqFfuMZqeHjqqkGnX4YU",
+    "project_id": 1,
     "local_files_serving_enabled": true,
     "local_files_document_root": "./data"
   },
@@ -28,7 +28,7 @@
     "epochs": 100,
     "image_size": 640,
     "batch_size": 16,
-    "model_score_threshold": 0.75,
+    "model_score_threshold": 0.15,
     "model_name": "yolo11s.pt",
     "available_models": {
       "nano": "yolo11n.pt",
