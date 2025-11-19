@@ -16,7 +16,7 @@ from numpy import isin
 from ultralytics import YOLO
 from label_studio_sdk import LabelStudio
 from label_studio_sdk_wrapper.config import get_config
-from label_studio_sdk_wrapper.inference_roi_moto_plate import REGISTERED_PIPELINES
+from label_studio_sdk_wrapper import PIPELINE_REGISTRY
 from tqdm.asyncio import tqdm as async_tqdm
 
 # DEBUG_TASKS = [123]
@@ -204,12 +204,12 @@ def predict_unlabeled(
         
         # Load model - either custom pipeline or standard YOLO
         if pipeline_name:
-            if pipeline_name not in REGISTERED_PIPELINES:
+            if pipeline_name not in PIPELINE_REGISTRY:
                 print(f"❌ Unknown pipeline: {pipeline_name}")
-                print(f"Available pipelines: {list(REGISTERED_PIPELINES.keys())}")
+                print(f"Available pipelines: {list(PIPELINE_REGISTRY.keys())}")
                 sys.exit(1)
             
-            pipeline_class = REGISTERED_PIPELINES[pipeline_name]
+            pipeline_class = PIPELINE_REGISTRY[pipeline_name]
             model = pipeline_class(
                 model_path=model_path,
                 roi_conf_thres=conf_threshold,

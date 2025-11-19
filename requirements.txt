@@ -4,6 +4,7 @@ label-studio>=1.9.0
 label-studio-sdk==2.0.4
 ultralytics>=8.0.0
 python-dotenv>=1.0.0
+PyYAML
 
 # Image processing (included with ultralytics)
 # opencv-python
